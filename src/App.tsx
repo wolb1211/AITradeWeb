@@ -3,6 +3,7 @@ import { AppLayout } from './layouts/AppLayout'
 import { PublicLayout } from './layouts/PublicLayout'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireVip } from './components/RequireVip'
+import { SHOW_OFFICIAL_STRATEGIES } from './config/features'
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from './pages/AuthPages'
 import {
   AgentCenterPage, DashboardPage, EaDownloadsPage, OrdersPage, ProfilePage, SecurityPage, StrategiesPage,
@@ -15,7 +16,7 @@ export default function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/official-strategies" element={<OfficialStrategiesPage />} />
+        {SHOW_OFFICIAL_STRATEGIES && <Route path="/official-strategies" element={<OfficialStrategiesPage />} />}
         <Route path="/guide" element={<GuidePage />} />
         <Route path="/guide/:id" element={<GuideDetailPage />} />
         <Route path="/terms" element={<LegalPage type="terms" />} />

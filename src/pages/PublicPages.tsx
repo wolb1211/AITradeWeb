@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Brand } from '../components/Brand'
 import { LegalDocumentContent, legalLead } from '../components/LegalDocumentContent'
+import { SHOW_OFFICIAL_STRATEGIES } from '../config/features'
 import { apiRequest, hasSession } from '../lib/api'
 
 const steps = [
@@ -84,12 +85,12 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="public-section">
+      {SHOW_OFFICIAL_STRATEGIES && <section className="public-section">
         <div className="public-container strategy-highlight">
           <div className="strategy-visual"><div className="chart-lines"><i /><i /><i /><i /><i /></div><div className="chart-label label-buy">BUY</div><div className="chart-label label-hold">HOLD</div><LineChart /></div>
           <div className="strategy-copy"><span className="section-kicker">首个官方策略</span><h2>GL 趋势自动分析策略</h2><p>结合价格行为、本地指标预筛选和 AI 决策，识别突破、趋势延续与震荡行情，并为 MT 终端返回结构化开单及风控动作。</p><ul><li><Check />低成本规则先过滤无效行情</li><li><Check />AI 只在候选交易机会出现时参与</li><li><Check />支持固定手数与风险金额计算</li></ul><Link className="text-action" to="/official-strategies">查看策略详情<ArrowRight size={17} /></Link></div>
         </div>
-      </section>
+      </section>}
 
       <section className="cta-section"><div className="public-container cta-inner"><div><span>READY TO START?</span><h2>部署您的第一个 AI 交易策略</h2><p>创建账户、选择策略并连接 MT4/MT5，所有配置都可以随时调整。</p></div><Link className="button button-light button-large" to="/register">免费创建账户<ArrowRight size={18} /></Link></div></section>
     </>

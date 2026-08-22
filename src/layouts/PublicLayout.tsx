@@ -2,11 +2,12 @@ import { CircleUserRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, 
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Brand } from '../components/Brand'
+import { SHOW_OFFICIAL_STRATEGIES } from '../config/features'
 import { apiRequest, authUserDisplayName, clearSession, getStoredUser, hasSession } from '../lib/api'
 
 const links = [
   { to: '/', label: '首页', end: true },
-  { to: '/official-strategies', label: '官方策略' },
+  ...(SHOW_OFFICIAL_STRATEGIES ? [{ to: '/official-strategies', label: '官方策略' }] : []),
   { to: '/guide', label: '接入指南' },
 ]
 
@@ -55,7 +56,7 @@ export function PublicLayout() {
             <Brand />
             <p>为 MT4/MT5 提供可配置、可追踪的 AI 策略分析与交易决策服务。</p>
           </div>
-          <div><strong>产品</strong><Link to="/official-strategies">官方策略</Link><Link to="/guide">接入指南</Link></div>
+          <div><strong>产品</strong>{SHOW_OFFICIAL_STRATEGIES && <Link to="/official-strategies">官方策略</Link>}<Link to="/guide">接入指南</Link></div>
           <div><strong>账户</strong>{loggedIn ? <Link to="/app">用户中心</Link> : <><Link to="/login">登录</Link><Link to="/register">注册</Link></>}</div>
           <div><strong>协议</strong><Link to="/terms">服务条款</Link><Link to="/privacy">隐私政策</Link></div>
         </div>
