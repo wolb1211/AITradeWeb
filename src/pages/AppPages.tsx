@@ -73,6 +73,8 @@ type PagedOrdersData = {
   total: number; page: number; size: number; pages: number; list: PortalOrder[]
   summary: { total: number; wins: number; losses: number; win_rate: number; pnl: number; symbol_count: number }
   curve: PnlCurvePoint[]
+  curve_granularity: 'order' | 'hour' | 'day'
+  detail_retention_days: number
   filters: { deployments: Array<{ id: string; key: string; name: string }>; symbols: string[] }
 }
 type EaDownloadItem = { id: string; name: string; description: string; oss_url: string; file_name: string; file_size: number; updated_at: string }
@@ -625,6 +627,7 @@ export function OrdersPage() {
   if (loading && !data) return <div className="permission-loading">正在加载历史订单...</div>
   if (!data) return <div className="permission-notice"><ShieldCheck size={18} /><div><strong>订单加载失败</strong><span>{error}</span></div></div>
   const summary = data.summary
+  const curveGranularity = ({ order: '逐笔订单', hour: '按小时', day: '按日' } as const)[data.curve_granularity] || '自动'
   return <>
     <PageHeading className="orders-page-heading" eyebrow="ORDER HISTORY" title="历史订单" description="数据由 MT4/MT5 同步，用于汇总策略订单与净盈亏；受网络或同步状态影响可能存在遗漏，仅供参考，实际数据请以交易平台为准。" />
     <section className="usage-filter-panel order-filter-panel">
@@ -636,8 +639,8 @@ export function OrdersPage() {
     </section>
     {error && <div className="permission-notice"><ShieldCheck size={18} /><div><strong>订单数据刷新失败</strong><span>{error}</span></div></div>}
     <section className="stats-grid compact-stats"><StatCard label="历史订单" value={numberText(summary.total)} note={`${numberText(summary.symbol_count)} 个交易商品`} icon={<ReceiptText />} /><StatCard label="盈利订单" value={numberText(summary.wins)} note={`胜率 ${summary.win_rate.toFixed(1)}%`} icon={<ArrowUpRight />} tone="blue" /><StatCard label="亏损订单" value={numberText(summary.losses)} note="当前筛选范围" icon={<ArrowDownRight />} /><StatCard label="累计净盈亏" value={signedMoney(summary.pnl)} note="当前筛选范围，含手续费和库存费" icon={<CircleDollarSign />} tone="amber" /></section>
-    <section className="panel order-chart-panel"><div className="panel-heading"><div><span className="eyebrow">PNL CURVE</span><h2>累计净盈亏曲线</h2></div><span className="order-chart-note">随筛选条件变化</span></div><Suspense fallback={<div className="pnl-chart-empty">正在加载图表...</div>}><PnlChart data={data.curve} /></Suspense></section>
-    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">SYNCED FROM MT</span><h2>订单明细</h2></div>{loading && <span className="order-loading-note">正在更新...</span>}</div>
+    <section className="panel order-chart-panel"><div className="panel-heading"><div><span className="eyebrow">PNL CURVE</span><h2>累计净盈亏曲线</h2></div><span className="order-chart-note">{curveGranularity} · 以平仓时间统计</span></div><Suspense fallback={<div className="pnl-chart-empty">正在加载图表...</div>}><PnlChart data={data.curve} /></Suspense></section>
+    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">SYNCED FROM MT</span><h2>订单明细</h2></div><span className="order-loading-note">{loading ? '正在更新...' : `仅显示近 ${data.detail_retention_days || 365} 天明细`}</span></div>
       {data.list.length ? <><div className="table-wrap expanded"><table><thead><tr><th>订单</th><th>交易账号</th><th>商品</th><th>方向</th><th>手数</th><th>开仓价</th><th>平仓价</th><th>净盈亏</th><th>平仓时间</th></tr></thead><tbody>{data.list.map((order) => { const side = tradeSide(order.mt_type); return <tr key={`${order.deployment_id}-${order.account_login}-${order.order_id}`}><td className="mono">#{order.order_id}</td><td><strong className="order-account">{order.account_login || '-'}</strong></td><td><strong>{order.symbol}</strong></td><td><span className={side === 'BUY' ? 'trade-buy' : 'trade-sell'}>{side}</span></td><td>{order.volume.toFixed(2)}</td><td>{order.open_price || '-'}</td><td>{order.close_price || '-'}</td><td className={order.net_profit >= 0 ? 'profit' : 'loss'}>{signedMoney(order.net_profit)}</td><td className="muted-cell">{unixTime(order.close_time)}</td></tr> })}</tbody></table></div><div className="usage-pagination"><span>共 {numberText(data.total)} 条</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><em>{page} / {data.pages}</em><button type="button" disabled={page >= data.pages || loading} onClick={() => setPage((value) => Math.min(data.pages, value + 1))}>下一页</button></div></div></> : <EmptyState icon={<ReceiptText />} title="暂无匹配订单" description="请调整策略 Key、交易商品或时间范围。" />}
     </section>
   </>

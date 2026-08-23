@@ -290,7 +290,7 @@ code, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monosp
 .agent-level-badge strong { color: var(--text); font-size: 17px; }
 .agent-code-block > div, .agent-link-block > div { display: flex; gap: 8px; min-width: 0; }
 .agent-code-block code, .agent-link-block code { flex: 1; min-width: 0; padding: 10px 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-soft); color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.agent-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.agent-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 15px; }
 
 @media (max-width: 980px) {
   .agent-invite-panel { grid-template-columns: 1fr 1fr; }
