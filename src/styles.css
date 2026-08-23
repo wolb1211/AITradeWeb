@@ -243,6 +243,13 @@ code, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monosp
 .ai-pricing-modal td:nth-child(2),.ai-pricing-modal td:nth-child(3) { color: var(--green); font-variant-numeric: tabular-nums; }
 .ai-pricing-modal > small { color: var(--muted-2); font-size: 12px; line-height: 1.7; }
 .ai-pricing-modal > .button { justify-self: end; min-width: 100px; }
+.ai-pricing-modal .table-wrap { max-height: min(55vh, 520px); overflow: auto; }
+.ai-pricing-modal thead { position: sticky; z-index: 1; top: 0; background: var(--panel); }
+.wallet-pricing-summary { display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+.wallet-pricing-summary > div { min-width: 0; }
+.wallet-pricing-summary h2 { margin: 7px 0 9px; font-size: 16px; }
+.wallet-pricing-summary p { max-width: 960px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.wallet-pricing-summary > .button { flex: 0 0 auto; }
 .ea-download-list { display: grid; gap: 16px; }
 .ea-download-card { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 18px; padding: 22px; }
 .ea-download-icon { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid rgba(50,217,155,.22); border-radius: 12px; color: var(--green); background: rgba(50,217,155,.06); }
@@ -300,4 +307,6 @@ code, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monosp
   .agent-invite-panel, .agent-stats { grid-template-columns: 1fr; }
   .agent-link-block { grid-column: auto; }
   .agent-code-block > div, .agent-link-block > div { align-items: stretch; flex-direction: column; }
+  .wallet-pricing-summary { align-items: stretch; flex-direction: column; gap: 18px; }
+  .wallet-pricing-summary > .button { width: 100%; }
 }

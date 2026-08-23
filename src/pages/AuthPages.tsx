@@ -82,7 +82,7 @@ export function LoginPage() {
     } catch (requestError) { setError(errorText(requestError)) } finally { setLoading(false) }
   }
 
-  return <AuthShell eyebrow="WELCOME BACK" title="登录您的账号" description="继续管理策略、AI 余额和交易记录。" footer={<>还没有账号？<Link to="/register">立即注册</Link></>}>
+  return <AuthShell eyebrow="WELCOME BACK" title="登录您的账号" description="继续管理策略、GL AI余额和交易记录。" footer={<>还没有账号？<Link to="/register">立即注册</Link></>}>
     <div className="auth-tabs"><button className={mode === 'password' ? 'active' : ''} type="button" onClick={() => { setMode('password'); setError('') }}>密码登录</button><button className={mode === 'code' ? 'active' : ''} type="button" onClick={() => { setMode('code'); setError('') }}>验证码登录</button></div>
     <form className="auth-form" onSubmit={submit}>
       <label><span>邮箱账号</span><div className="input-wrap"><Mail size={18} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required /></div></label>

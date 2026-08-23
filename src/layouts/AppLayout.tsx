@@ -14,7 +14,7 @@ const primaryNav = [
   { to: '/app', label: '概览', icon: LayoutDashboard, end: true },
   { to: '/app/strategies', label: '我的策略', icon: Bot },
   { to: '/app/orders', label: '历史订单', icon: ReceiptText },
-  { to: '/app/wallet', label: 'AI 余额', icon: Coins },
+  { to: '/app/wallet', label: 'GL AI余额', icon: Coins },
   { to: '/app/usage', label: '使用记录', icon: FileClock },
   { to: '/app/ea-downloads', label: 'EA 下载', icon: Download },
 ]
@@ -29,7 +29,7 @@ const titles: Record<string, string> = {
   '/app/strategies': '我的策略',
   '/app/strategies/new': '创建策略',
   '/app/orders': '历史订单',
-  '/app/wallet': 'AI 余额',
+  '/app/wallet': 'GL AI余额',
   '/app/usage': 'AI 使用记录',
   '/app/ea-downloads': 'EA 下载',
   '/app/profile': '用户资料',
