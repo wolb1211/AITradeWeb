@@ -224,8 +224,19 @@ code, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monosp
 .custom-ai-note { display: flex; align-items: flex-start; gap: 7px; padding: 11px; border: 1px solid rgba(50,217,155,.13); border-radius: 8px; color: var(--muted); background: rgba(50,217,155,.035); font-size: 12px; line-height: 1.6; }
 .custom-ai-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--green); }
 .custom-ai-note > span { flex: 1; }
-.custom-ai-note > button { flex: 0 0 auto; padding: 0; border: 0; color: var(--green); background: transparent; font-size: 12px; font-weight: 650; cursor: pointer; }
-.custom-ai-note > button:hover { color: #75efc2; text-decoration: underline; }
+.custom-ai-note-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; }
+.custom-ai-note-actions > button { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; color: var(--green); background: transparent; font-size: 12px; font-weight: 650; cursor: pointer; }
+.custom-ai-note-actions > button:hover { color: #75efc2; text-decoration: underline; }
+.custom-ai-note-actions > button:disabled { opacity: .55; cursor: wait; }
+.custom-ai-note-actions .custom-ai-test-button { padding: 5px 8px; border: 1px solid rgba(50,217,155,.28); border-radius: 6px; background: rgba(50,217,155,.08); }
+.custom-ai-test-result { display: grid; gap: 13px; }
+.custom-ai-test-success { display: grid; width: 48px; height: 48px; place-items: center; margin: 2px auto 5px; border: 1px solid rgba(50,217,155,.28); border-radius: 50%; color: var(--green); background: rgba(50,217,155,.08); }
+.custom-ai-test-result p { display: flex; justify-content: space-between; gap: 20px; margin: 0; color: var(--muted); font-size: 13px; }
+.custom-ai-test-result p strong { color: var(--text); text-align: right; }
+.custom-ai-test-result > div:not(.custom-ai-test-success) > span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 13px; }
+.custom-ai-test-result pre { margin: 0; padding: 11px; overflow-wrap: anywhere; white-space: pre-wrap; border: 1px solid var(--border); border-radius: 8px; color: #c9d8d2; background: #07110d; font: 12px/1.6 Consolas,monospace; }
+.custom-ai-test-result small { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.custom-ai-test-result > .button { justify-self: end; min-width: 88px; }
 .custom-ai-help { display: grid; gap: 14px; padding-top: 2px; }
 .custom-ai-help p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .custom-ai-help h3 { margin: 3px 0 -3px; font-size: 14px; }

@@ -38,6 +38,11 @@ type AiFormConfig = {
   mode: 'official' | 'custom'; endpointId: string; model: string; customModel: string; baseUrl: string; apiKey: string; keyConfigured: boolean
 }
 
+type AiConnectionTestResult = {
+  success: boolean; model?: string; elapsed_ms?: number; response_preview?: string
+  prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; error?: string
+}
+
 type StrategyDefaultConfig = {
   position_sizing_mode?: string; position_size_mode?: string
   fixed_lot?: number; fixed_volume?: number
@@ -473,9 +478,41 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
   onShowCustomHelp: () => void
   onChange: (next: AiFormConfig) => void
 }) {
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<AiConnectionTestResult | null>(null)
   const selectOfficial = (endpointId: string | null) => {
     const option = options.find((item) => item.id === endpointId)
     if (option) onChange({ ...value, endpointId: option.id, model: option.model })
+  }
+  const testCustomAi = async () => {
+    if (!value.baseUrl.trim() || !value.customModel.trim() || !value.apiKey.trim()) {
+      notifications.show({
+        title: '请完整填写测试配置',
+        message: value.keyConfigured && !value.apiKey.trim() ? '为保护密钥安全，测试已有配置时请重新输入 API Key。' : '请输入 Base URL、模型名称和 API Key。',
+        color: 'red',
+      })
+      return
+    }
+    setTesting(true)
+    try {
+      const result = await apiRequest<AiConnectionTestResult>('/api/v1/auth/custom-ai/test', {
+        method: 'POST',
+        body: JSON.stringify({
+          base_url: value.baseUrl.trim(),
+          model: value.customModel.trim(),
+          api_key: value.apiKey.trim(),
+        }),
+      })
+      if (!result.success) {
+        notifications.show({ title: '连接测试失败', message: result.error || '模型接口未能正常响应', color: 'red', autoClose: 8000 })
+        return
+      }
+      setTestResult(result)
+    } catch (reason) {
+      notifications.show({ title: '连接测试失败', message: reason instanceof Error ? reason.message : '模型接口未能正常响应', color: 'red', autoClose: 8000 })
+    } finally {
+      setTesting(false)
+    }
   }
   return <div className="ai-select">
     <div className="ai-select-title"><BrainCircuit /><strong>{title}</strong></div>
@@ -491,8 +528,11 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
       <label><span>Base URL</span><input value={value.baseUrl} onChange={(event) => onChange({ ...value, baseUrl: event.target.value })} placeholder="例如 https://api.openai.com/v1" /></label>
       <label><span>模型名称</span><input value={value.customModel} onChange={(event) => onChange({ ...value, customModel: event.target.value })} placeholder="例如 gpt-4o / deepseek-chat / qwen-plus" /></label>
       <label><span>API Key</span><input type="password" value={value.apiKey} onChange={(event) => onChange({ ...value, apiKey: event.target.value })} placeholder={value.keyConfigured ? '已配置，留空表示不修改' : '请输入 API Key'} autoComplete="new-password" /></label>
-      <div className="custom-ai-note"><ShieldCheck size={15} /><span>需兼容 OpenAI Chat Completions 请求格式；使用自定义 AI 不扣除平台余额。</span><button type="button" onClick={onShowCustomHelp}>查看接口说明</button></div>
+      <div className="custom-ai-note"><ShieldCheck size={15} /><span>需兼容 OpenAI Chat Completions 请求格式；使用自定义 AI 不扣除平台余额。</span><div className="custom-ai-note-actions"><button type="button" onClick={onShowCustomHelp}>查看接口说明</button><button className="custom-ai-test-button" type="button" disabled={testing} onClick={testCustomAi}><Zap size={13} />{testing ? '测试中...' : '测试连接'}</button></div></div>
     </div>}
+    <Modal opened={Boolean(testResult)} onClose={() => setTestResult(null)} title="模型连接测试成功" centered classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+      {testResult && <div className="custom-ai-test-result"><div className="custom-ai-test-success"><Check size={22} /></div><p><span>模型</span><strong>{testResult.model || value.customModel}</strong></p><p><span>响应耗时</span><strong>{Number(testResult.elapsed_ms || 0)} ms</strong></p><p><span>Token 用量</span><strong>输入 {Number(testResult.prompt_tokens || 0)} / 输出 {Number(testResult.completion_tokens || 0)} / 合计 {Number(testResult.total_tokens || 0)}</strong></p><div><span>返回内容</span><pre>{testResult.response_preview || '-'}</pre></div><small>本次仅测试接口连通性，不扣除平台余额，也不会写入 AI 使用流水；AI 服务商可能收取少量请求费用。</small><button className="button button-primary" type="button" onClick={() => setTestResult(null)}>关闭</button></div>}
+    </Modal>
   </div>
 }
 
