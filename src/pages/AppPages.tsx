@@ -43,6 +43,27 @@ type AiConnectionTestResult = {
   prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; error?: string
 }
 
+function aiModelCategory(name: string): string {
+  const category = String(name || '').split('/')[0]?.trim()
+  return category || '其他'
+}
+
+function aiModelCategories(options: AiModelOption[]): string[] {
+  return Array.from(new Set(options.map((item) => aiModelCategory(item.provider_name))))
+}
+
+function groupedAiModelOptions(options: AiModelOption[], defaultEndpointId: string) {
+  return aiModelCategories(options).map((category) => ({
+    group: category,
+    items: options
+      .filter((item) => aiModelCategory(item.provider_name) === category)
+      .map((item) => ({
+        value: item.id,
+        label: `${item.provider_name}${item.id === defaultEndpointId ? '（默认）' : ''}`,
+      })),
+  }))
+}
+
 type StrategyDefaultConfig = {
   position_sizing_mode?: string; position_size_mode?: string
   fixed_lot?: number; fixed_volume?: number
@@ -327,6 +348,7 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
   const [customStrategyOpened, setCustomStrategyOpened] = useState(false)
   const [strategyDetailOpened, setStrategyDetailOpened] = useState(false)
   const [pricingOpened, setPricingOpened] = useState(false)
+  const [pricingCategory, setPricingCategory] = useState('全部')
   const [customAiHelpOpened, setCustomAiHelpOpened] = useState(false)
   const [libraryStrategy, setLibraryStrategy] = useState<{ code: string; name: string; summary: string; open_ai_endpoint_id: string; position_ai_endpoint_id: string; default_config: StrategyDefaultConfig } | null>(null)
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
@@ -460,7 +482,7 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
       <div className="strategy-library-detail"><h3>{strategyTitle}</h3><p>{strategyDescription.replace(/\\n/g, '\n')}</p><button className="button button-primary" type="button" onClick={() => setStrategyDetailOpened(false)}>关闭</button></div>
     </Modal>
     <Modal opened={pricingOpened} onClose={() => setPricingOpened(false)} title="GL AI 收费标准" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
-      <div className="ai-pricing-modal"><p>以下价格为平台实际计费标准，单位：元 / 百万 Token。</p><div className="table-wrap"><table><thead><tr><th>模型</th><th>输入价格</th><th>输出价格</th></tr></thead><tbody>{aiModelOptions.map((item) => <tr key={item.id}><td><strong>{item.provider_name}</strong></td><td>¥{money(item.input_price_per_million)}</td><td>¥{money(item.output_price_per_million)}</td></tr>)}</tbody></table></div><small>每次调用按照实际输入和输出 Token 分别计算费用，最终从账户余额中实时扣除。</small><button className="button button-primary" type="button" onClick={() => setPricingOpened(false)}>关闭</button></div>
+      <div className="ai-pricing-modal"><p>以下价格为平台实际计费标准，单位：元 / 百万 Token。</p><div className="ai-model-category-tabs"><button className={pricingCategory === '全部' ? 'active' : ''} type="button" onClick={() => setPricingCategory('全部')}>全部</button>{aiModelCategories(aiModelOptions).map((category) => <button key={category} className={pricingCategory === category ? 'active' : ''} type="button" onClick={() => setPricingCategory(category)}>{category}</button>)}</div><div className="table-wrap"><table><thead><tr><th>模型</th><th>输入价格</th><th>输出价格</th></tr></thead><tbody>{aiModelOptions.filter((item) => pricingCategory === '全部' || aiModelCategory(item.provider_name) === pricingCategory).map((item) => <tr key={item.id}><td><strong>{item.provider_name}</strong></td><td>¥{money(item.input_price_per_million)}</td><td>¥{money(item.output_price_per_million)}</td></tr>)}</tbody></table></div><small>每次调用按照实际输入和输出 Token 分别计算费用，最终从账户余额中实时扣除。</small><button className="button button-primary" type="button" onClick={() => setPricingOpened(false)}>关闭</button></div>
     </Modal>
     <Modal opened={customAiHelpOpened} onClose={() => setCustomAiHelpOpened(false)} title="自定义 AI 接口说明" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
       <div className="custom-ai-help"><p>当前支持 OpenAI Chat Completions 兼容结构。OpenAI、DeepSeek、通义千问兼容模式以及多数中转服务商通常都可以使用。</p><h3>请求结构示例</h3><pre>{'{\n  "model": "gpt-4o",\n  "messages": [\n    { "role": "system", "content": "..." },\n    { "role": "user", "content": "..." }\n  ],\n  "temperature": 0.2\n}'}</pre><p>请确认服务商接口支持以上 JSON 请求结构，并支持 Bearer API Key 鉴权；不兼容此结构的接口暂时无法接入。</p><button className="button button-primary" type="button" onClick={() => setCustomAiHelpOpened(false)}>关闭</button></div>
@@ -521,7 +543,7 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
       <button className={value.mode === 'custom' ? 'active' : ''} type="button" onClick={() => onChange({ ...value, mode: 'custom' })}>自定义AI</button>
     </div>
     {value.mode === 'official' ? <>
-      <label><span>选择模型</span><Select className="app-mantine-select" value={value.endpointId || null} onChange={selectOfficial} data={options.map((item) => ({ value: item.id, label: `${item.provider_name}${item.id === defaultEndpointId ? '（默认）' : ''}` }))} placeholder={loading ? '正在加载模型...' : '请选择模型'} disabled={loading || options.length === 0} allowDeselect={false} searchable /></label>
+      <label><span>选择模型</span><Select className="app-mantine-select" value={value.endpointId || null} onChange={selectOfficial} data={groupedAiModelOptions(options, defaultEndpointId)} placeholder={loading ? '正在加载模型...' : '请选择模型'} disabled={loading || options.length === 0} allowDeselect={false} searchable /></label>
       <div className="ai-price"><Coins size={15} /><span>{options.length ? '按实际输入、输出 Token 和模型价格计费' : loading ? '正在读取模型配置...' : '暂无可用的 GL AI 模型'}</span>{options.length > 0 && <button type="button" onClick={onShowPricing}>查看收费标准</button>}</div>
     </> : <div className="custom-ai-fields">
       <label><span>接口类型</span><div className="custom-ai-type">OpenAI 兼容接口</div></label>
@@ -585,6 +607,7 @@ export function WalletPage() {
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
   const [aiModelsLoading, setAiModelsLoading] = useState(true)
   const [pricingOpened, setPricingOpened] = useState(false)
+  const [pricingCategory, setPricingCategory] = useState('全部')
   useEffect(() => {
     let active = true
     apiRequest<{ list: AiModelOption[] }>('/api/v1/auth/ai-model-options')
@@ -604,7 +627,7 @@ export function WalletPage() {
     <section className="wallet-grid"><article className="wallet-card"><div className="wallet-card-top"><div><span>当前账户余额</span><strong>¥{money(wallet.balance)}</strong><small>人民币 CNY</small></div><WalletCards /></div><div className="wallet-card-bottom"><div><span>含信用额度可用</span><strong>¥{money(wallet.available_balance)}</strong></div><div><span>信用额度</span><strong>¥{money(wallet.credit_limit)}</strong></div></div></article><article className="panel recharge-card"><div className="panel-heading"><div><span className="eyebrow">MANUAL TOP-UP</span><h2>人工充值</h2></div><CreditCard /></div><p>当前使用人工转账充值。完成转账后联系管理员，管理员确认后将金额加入您的 GL AI余额。</p><div className="recharge-notice"><ShieldCheck /><span><strong>每次余额变动都会生成流水</strong><small>累计入账 ¥{money(wallet.total_credit)}，累计扣减 ¥{money(wallet.total_debit)}。</small></span></div><button className="button button-secondary" type="button">查看充值说明</button></article></section>
     <section className="panel wallet-pricing-summary"><div><span className="eyebrow">GL PROVIDED AI</span><h2>GL 提供AI</h2><p>为简化 AI 配置，GainLab 提供多款常用模型的一键接入服务，无需单独申请或填写 API Key。用户可预充值 GL AI余额，系统将按实际用量自动计费并实时扣除。模型服务商可能调整价格，平台收费标准将同步更新，实际费用以调用时公示的价格为准。</p></div><button className="button button-secondary" type="button" onClick={() => setPricingOpened(true)}><Coins size={16} />查看收费详情</button></section>
     <section className="panel"><div className="panel-heading"><div><span className="eyebrow">FUND LEDGER</span><h2>资金流水</h2></div><Link className="button button-secondary" to="/app/usage"><BrainCircuit size={15} />查看 AI 用量和扣费</Link></div>{wallet.ledger.length ? <div className="table-wrap"><table><thead><tr><th>时间</th><th>类型</th><th>说明</th><th>变动</th><th>余额</th></tr></thead><tbody>{wallet.ledger.map((item) => { const credit = Number(item.amount) >= 0; return <tr key={item.id}><td className="muted-cell">{isoTime(item.created_at)}</td><td><span className={credit ? 'ledger-credit' : 'ledger-debit'}>{ledgerName(item.entry_type)}</span></td><td>{item.remark || '-'}</td><td className={credit ? 'profit' : 'loss'}>{credit ? '+' : ''}¥{money(item.amount)}</td><td><strong>¥{money(item.balance_after)}</strong></td></tr> })}</tbody></table></div> : <EmptyState icon={<FileClock />} title="暂无资金流水" description="人工充值、后台余额调整、退款或补偿会显示在这里。AI 调用扣费请前往 AI 使用记录查看。" />}</section>
-    <Modal opened={pricingOpened} onClose={() => setPricingOpened(false)} title="GL AI 收费详情" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}><div className="ai-pricing-modal"><p>以下价格为平台实际计费标准，单位：元 / 百万 Token。</p>{aiModelsLoading ? <div className="permission-loading wallet-pricing-loading">正在读取模型价格...</div> : aiModelOptions.length ? <div className="table-wrap"><table><thead><tr><th>模型</th><th>输入价格</th><th>输出价格</th></tr></thead><tbody>{aiModelOptions.map((item) => <tr key={item.id}><td><strong>{item.provider_name}</strong></td><td>¥{money(item.input_price_per_million)}</td><td>¥{money(item.output_price_per_million)}</td></tr>)}</tbody></table></div> : <EmptyState icon={<Coins />} title="暂无收费标准" description="管理员配置可用的 GL AI 模型后会显示在这里。" />}<small>每次调用按照实际输入和输出 Token 分别计算费用，最终从 GL AI余额中实时扣除。模型价格可能随服务商调整，请以调用时平台公示的价格为准。</small><button className="button button-primary" type="button" onClick={() => setPricingOpened(false)}>关闭</button></div></Modal>
+    <Modal opened={pricingOpened} onClose={() => setPricingOpened(false)} title="GL AI 收费详情" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}><div className="ai-pricing-modal"><p>以下价格为平台实际计费标准，单位：元 / 百万 Token。</p>{aiModelsLoading ? <div className="permission-loading wallet-pricing-loading">正在读取模型价格...</div> : aiModelOptions.length ? <><div className="ai-model-category-tabs"><button className={pricingCategory === '全部' ? 'active' : ''} type="button" onClick={() => setPricingCategory('全部')}>全部</button>{aiModelCategories(aiModelOptions).map((category) => <button key={category} className={pricingCategory === category ? 'active' : ''} type="button" onClick={() => setPricingCategory(category)}>{category}</button>)}</div><div className="table-wrap"><table><thead><tr><th>模型</th><th>输入价格</th><th>输出价格</th></tr></thead><tbody>{aiModelOptions.filter((item) => pricingCategory === '全部' || aiModelCategory(item.provider_name) === pricingCategory).map((item) => <tr key={item.id}><td><strong>{item.provider_name}</strong></td><td>¥{money(item.input_price_per_million)}</td><td>¥{money(item.output_price_per_million)}</td></tr>)}</tbody></table></div></> : <EmptyState icon={<Coins />} title="暂无收费标准" description="管理员配置可用的 GL AI 模型后会显示在这里。" />}<small>每次调用按照实际输入和输出 Token 分别计算费用，最终从 GL AI余额中实时扣除。模型价格可能随服务商调整，请以调用时平台公示的价格为准。</small><button className="button button-primary" type="button" onClick={() => setPricingOpened(false)}>关闭</button></div></Modal>
   </>
 }
 
