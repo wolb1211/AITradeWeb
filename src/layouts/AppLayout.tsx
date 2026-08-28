@@ -5,6 +5,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Brand } from '../components/Brand'
+import { ThemeMenuItem } from '../components/ThemeMenuItem'
 import {
   apiRequest, authUserDisplayName, authUserVipDetail, authUserVipLabel,
   clearSession, getStoredUser, saveStoredUser, type AuthUser,
@@ -120,6 +121,7 @@ export function AppLayout() {
                 <Link to="/app/profile" role="menuitem" onClick={() => setUserMenuOpen(false)}><CircleUserRound size={16} /><span>用户资料</span></Link>
                 <Link to="/app/security" role="menuitem" onClick={() => setUserMenuOpen(false)}><ShieldCheck size={16} /><span>账户安全</span></Link>
                 {isAgent && <Link to="/app/agent" role="menuitem" onClick={() => setUserMenuOpen(false)}><UsersRound size={16} /><span>代理中心</span></Link>}
+                <ThemeMenuItem />
                 <button className="user-menu-logout" type="button" role="menuitem" onClick={logout}><LogOut size={16} /><span>退出登录</span></button>
               </div>}
             </div>

@@ -2,6 +2,7 @@ import { CircleUserRound, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, 
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Brand } from '../components/Brand'
+import { ThemeMenuItem } from '../components/ThemeMenuItem'
 import { SHOW_OFFICIAL_STRATEGIES } from '../config/features'
 import { apiRequest, authUserDisplayName, clearSession, getStoredUser, hasSession } from '../lib/api'
 
@@ -42,7 +43,7 @@ export function PublicLayout() {
             ))}
           </nav>
           <div className="header-actions">
-            {loggedIn ? <div className="user-menu-wrap" ref={userMenuRef}><button className={`user-chip ${userMenuOpen ? 'is-open' : ''}`} type="button" onClick={() => setUserMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={userMenuOpen}><span>GL</span><div><strong>{displayName}</strong><small>{user.email}</small></div><Settings size={16} /></button>{userMenuOpen && <div className="user-menu" role="menu"><div className="user-menu-head"><span>GL</span><div><strong>{displayName}</strong><small>{user.email}</small></div></div><Link to="/app" role="menuitem" onClick={() => setUserMenuOpen(false)}><LayoutDashboard size={16} /><span>用户中心</span></Link><Link to="/app/profile" role="menuitem" onClick={() => setUserMenuOpen(false)}><CircleUserRound size={16} /><span>用户资料</span></Link><Link to="/app/security" role="menuitem" onClick={() => setUserMenuOpen(false)}><ShieldCheck size={16} /><span>账户安全</span></Link><button className="user-menu-logout" type="button" role="menuitem" onClick={logout}><LogOut size={16} /><span>退出登录</span></button></div>}</div> : <><Link className="button button-ghost" to="/login">登录</Link><Link className="button button-primary" to="/register">免费开始</Link></>}
+            {loggedIn ? <div className="user-menu-wrap" ref={userMenuRef}><button className={`user-chip ${userMenuOpen ? 'is-open' : ''}`} type="button" onClick={() => setUserMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={userMenuOpen}><span>GL</span><div><strong>{displayName}</strong><small>{user.email}</small></div><Settings size={16} /></button>{userMenuOpen && <div className="user-menu" role="menu"><div className="user-menu-head"><span>GL</span><div><strong>{displayName}</strong><small>{user.email}</small></div></div><Link to="/app" role="menuitem" onClick={() => setUserMenuOpen(false)}><LayoutDashboard size={16} /><span>用户中心</span></Link><Link to="/app/profile" role="menuitem" onClick={() => setUserMenuOpen(false)}><CircleUserRound size={16} /><span>用户资料</span></Link><Link to="/app/security" role="menuitem" onClick={() => setUserMenuOpen(false)}><ShieldCheck size={16} /><span>账户安全</span></Link><ThemeMenuItem /><button className="user-menu-logout" type="button" role="menuitem" onClick={logout}><LogOut size={16} /><span>退出登录</span></button></div>}</div> : <><Link className="button button-ghost" to="/login">登录</Link><Link className="button button-primary" to="/register">免费开始</Link></>}
           </div>
           <button className="menu-toggle" type="button" onClick={() => setOpen((value) => !value)} aria-label="切换菜单">
             {open ? <X /> : <Menu />}

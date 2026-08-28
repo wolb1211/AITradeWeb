@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { createTheme, MantineProvider } from '@mantine/core'
+import { createTheme, localStorageColorSchemeManager, MantineProvider } from '@mantine/core'
 import { DatesProvider } from '@mantine/dates'
 import { Notifications } from '@mantine/notifications'
 import 'dayjs/locale/zh-cn'
@@ -20,9 +20,11 @@ const theme = createTheme({
   defaultRadius: 'md',
 })
 
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'gainlab-ai-trader-color-scheme' })
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <MantineProvider theme={theme} forceColorScheme="dark">
+    <MantineProvider theme={theme} defaultColorScheme="dark" colorSchemeManager={colorSchemeManager}>
       <DatesProvider settings={{ locale: 'zh-cn', firstDayOfWeek: 1, weekendDays: [0, 6] }}>
         <Notifications position="top-right" />
         <BrowserRouter>

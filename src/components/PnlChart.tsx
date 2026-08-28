@@ -3,6 +3,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { init, use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
+import { useMantineColorScheme } from '@mantine/core'
 
 use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -14,6 +15,8 @@ export type PnlCurvePoint = {
 
 export function PnlChart({ data }: { data: PnlCurvePoint[] }) {
   const chartRef = useRef<HTMLDivElement | null>(null)
+  const { colorScheme } = useMantineColorScheme()
+  const isLight = colorScheme === 'light'
 
   useEffect(() => {
     if (!chartRef.current || !data.length) return
@@ -23,23 +26,23 @@ export function PnlChart({ data }: { data: PnlCurvePoint[] }) {
       grid: { top: 22, right: 22, bottom: 34, left: 66 },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#0b1814',
+        backgroundColor: isLight ? '#ffffff' : '#0b1814',
         borderColor: 'rgba(50,217,155,.28)',
-        textStyle: { color: '#d9e7e2', fontSize: 12 },
+        textStyle: { color: isLight ? '#182720' : '#d9e7e2', fontSize: 12 },
         valueFormatter: (value: number) => `${value >= 0 ? '+' : ''}¥${Number(value).toFixed(2)}`,
       },
       xAxis: {
         type: 'category',
         boundaryGap: false,
         data: data.map((item) => item.time),
-        axisLine: { lineStyle: { color: 'rgba(132,160,150,.22)' } },
+        axisLine: { lineStyle: { color: isLight ? 'rgba(29,71,56,.2)' : 'rgba(132,160,150,.22)' } },
         axisTick: { show: false },
-        axisLabel: { color: '#789087', fontSize: 12 },
+        axisLabel: { color: isLight ? '#60736b' : '#789087', fontSize: 12 },
       },
       yAxis: {
         type: 'value',
-        splitLine: { lineStyle: { color: 'rgba(132,160,150,.1)' } },
-        axisLabel: { color: '#789087', fontSize: 12, formatter: (value: number) => `¥${value}` },
+        splitLine: { lineStyle: { color: isLight ? 'rgba(29,71,56,.1)' : 'rgba(132,160,150,.1)' } },
+        axisLabel: { color: isLight ? '#60736b' : '#789087', fontSize: 12, formatter: (value: number) => `¥${value}` },
       },
       series: [{
         name: '累计净盈亏',
@@ -49,7 +52,7 @@ export function PnlChart({ data }: { data: PnlCurvePoint[] }) {
         symbolSize: 7,
         data: data.map((item) => item.pnl),
         lineStyle: { width: 2, color: '#32d99b' },
-        itemStyle: { color: '#32d99b', borderColor: '#0b1814', borderWidth: 2 },
+        itemStyle: { color: isLight ? '#0e9f6e' : '#32d99b', borderColor: isLight ? '#ffffff' : '#0b1814', borderWidth: 2 },
         areaStyle: { color: 'rgba(50,217,155,.12)' },
       }],
     })
@@ -59,7 +62,7 @@ export function PnlChart({ data }: { data: PnlCurvePoint[] }) {
       resizeObserver.disconnect()
       chart.dispose()
     }
-  }, [data])
+  }, [colorScheme, data, isLight])
 
   if (!data.length) return <div className="pnl-chart-empty">当前筛选范围暂无盈亏曲线</div>
   return <div className="pnl-chart-canvas" ref={chartRef} />

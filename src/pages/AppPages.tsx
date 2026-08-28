@@ -1,11 +1,11 @@
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bot, BrainCircuit,
   Check, ChevronRight, CircleDollarSign, Clock3, Coins, Copy, CreditCard, Database,
-  Download, Ellipsis, FileClock, Filter, Fingerprint, KeyRound, LineChart, LockKeyhole, Mail,
+  Download, Ellipsis, FileClock, Filter, Fingerprint, ImageIcon, KeyRound, LineChart, LockKeyhole, Mail,
   PauseCircle, PlayCircle, Plus, ReceiptText, RefreshCcw, Search, Settings2, ShieldCheck, Sparkles, Trash2, UserRound, UsersRound, X,
   WalletCards, Zap,
 } from 'lucide-react'
-import { Menu, Modal, Select } from '@mantine/core'
+import { Loader, Menu, Modal, Select } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { lazy, Suspense, type FormEvent, useEffect, useMemo, useState } from 'react'
@@ -18,29 +18,99 @@ const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({
 
 type PortalStrategy = {
   id: string; deployment_key: string; name: string; status: string; strategy_code: string; mt_login: string; summary: string
+  ea_description?: string
+  strategy_type?: string; open_logic?: string; position_logic?: string; compile_status?: string
+  open_indicators?: Array<{ name: string; alias: string; source: string; params: Record<string, number> }>
+  position_indicators?: Array<{ name: string; alias: string; source: string; params: Record<string, number> }>
+  unsupported_indicators?: string[]
   open_ai_mode: string; open_ai_model: string; position_ai_mode: string; position_ai_model: string
   open_ai_endpoint_id: string; open_ai_endpoint_name: string; open_ai_base_url: string; open_ai_key_configured: boolean
+  open_ai_vision_verified?: boolean
   position_ai_endpoint_id: string; position_ai_endpoint_name: string; position_ai_base_url: string; position_ai_key_configured: boolean
+  position_ai_vision_verified?: boolean
   ai_user_configured: boolean
   open_data_type: string; open_kline_count: number; position_data_type: string; position_kline_count: number
+  open_rule_plan?: CustomRulePlan; position_rule_plan?: CustomRulePlan; rule_engine_version?: number
+  open_requested_kline_count?: number; position_requested_kline_count?: number
   call_mode: string; call_val: number; position_size_mode: string; fixed_volume: number; risk_base_mode: string
   risk_amount: number; risk_percent: number; allow_add: boolean; max_positions: number; updated_at: string
   analysis_count: number; signal_count: number; order_count: number; official_tokens_used: number; custom_tokens_used: number; pnl: number
+}
+
+type CustomRulePlan = {
+  version: number
+  mode: 'deterministic' | 'ai'
+  rules: Array<{ when: string; description: string; action: Record<string, unknown> }>
+}
+
+type CustomStrategyPreview = {
+  summary: string
+  open_prompt_template: string
+  position_prompt_template: string
+  open_indicators: Array<{ name: string; alias: string; source: string; params: Record<string, number> }>
+  position_indicators: Array<{ name: string; alias: string; source: string; params: Record<string, number> }>
+  open_rule_plan: CustomRulePlan
+  position_rule_plan: CustomRulePlan
+  rule_engine_version: number
+  open_kline_count: number
+  position_kline_count: number
+  open_requested_kline_count: number
+  position_requested_kline_count: number
+  open_indicator_kline_count: number
+  position_indicator_kline_count: number
+  open_data_type: string
+  position_data_type: string
+  unsupported_indicators: string[]
+  warnings: string[]
+  prompt_version: number
+  compile_status: 'generated'
 }
 
 type AiModelOption = {
   id: string; provider_name: string; provider_type: string; model: string; display_name: string
   input_price_per_million: string; output_price_per_million: string
   is_default: boolean; official_available: boolean
+  supports_vision?: boolean; vision_test_status?: string
 }
 
 type AiFormConfig = {
-  mode: 'official' | 'custom'; endpointId: string; model: string; customModel: string; baseUrl: string; apiKey: string; keyConfigured: boolean
+  mode: 'official' | 'custom'; endpointId: string; model: string; customModel: string; baseUrl: string; apiKey: string; keyConfigured: boolean; visionVerified: boolean
 }
 
 type AiConnectionTestResult = {
   success: boolean; model?: string; elapsed_ms?: number; response_preview?: string
   prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; error?: string
+  supports_vision?: boolean; vision_test_status?: string
+}
+
+type IndicatorCatalogItem = {
+  name: string
+  title: string
+  description: string
+  aliases?: string[]
+  input: string
+  default_params: Record<string, number>
+  parameters: Array<{ name: string; label: string; default: number; description: string }>
+  sources?: Array<{ value: string; label: string; formula: string }>
+}
+
+const fallbackPriceSources = [
+  { value: 'close', label: '收盘价', formula: 'close' },
+  { value: 'open', label: '开盘价', formula: 'open' },
+  { value: 'high', label: '最高价', formula: 'high' },
+  { value: 'low', label: '最低价', formula: 'low' },
+  { value: 'hl2', label: '高低均价 HL2', formula: '(high + low) / 2' },
+  { value: 'hlc3', label: '典型价格 HLC3', formula: '(high + low + close) / 3' },
+  { value: 'ohlc4', label: '四价均值 OHLC4', formula: '(open + high + low + close) / 4' },
+  { value: 'oc2', label: '开收均价 OC2', formula: '(open + close) / 2' },
+  { value: 'wclprice', label: '加权收盘价', formula: '(high + low + close × 2) / 4' },
+]
+
+function indicatorSourceOptions(indicator: IndicatorCatalogItem) {
+  if (indicator.sources?.length) return indicator.sources
+  return ['ema', 'sma', 'wma', 'rsi', 'macd', 'bbands', 'roc', 'mom'].includes(indicator.name)
+    ? fallbackPriceSources
+    : []
 }
 
 function aiModelCategory(name: string): string {
@@ -83,7 +153,10 @@ type PortalUsage = {
   endpoint: string; input_tokens: number; output_tokens: number; charged_amount: string; success: boolean; billing_source?: string
   input_price_snapshot?: string; output_price_snapshot?: string; balance_after?: string | null; response_preview?: string; error_message?: string
   deployment_id?: string; deployment_key?: string; strategy_name?: string
+  screenshot_preview_id?: string
 }
+
+type UsageScreenshotPreview = { data_url: string; mime_type: string; size_bytes: number; created_at: string }
 
 type UsageFilters = { modelId: string; deploymentId: string; startAt: string; endAt: string }
 type UsageSummaryData = { calls: number; success_calls: number; input_tokens: number; output_tokens: number; official_tokens: number; custom_tokens: number; charged_amount: string }
@@ -201,8 +274,18 @@ function ledgerName(value: string) { return ({ admin_recharge: '人工充值', a
 function statusText(value: string) { return value === 'active' ? '运行中' : value === 'paused' ? '已暂停' : value === 'disabled' ? '已停用' : value || '未知' }
 function statusTone(value: string): 'active' | 'paused' | 'neutral' { return value === 'active' ? 'active' : value === 'paused' ? 'paused' : 'neutral' }
 function aiModeText(value: string) { return value === 'official' ? 'GL提供AI' : '自定义AI' }
-function sceneText(value: string) { const endpoint = String(value || '').toLowerCase(); return endpoint.includes('position') || endpoint.includes('risk') ? '持仓风控' : endpoint.includes('open') ? '开单分析' : value || '-' }
+function sceneText(value: string) { const endpoint = String(value || '').toLowerCase(); return endpoint.includes('compile') ? '生成自定义策略' : endpoint.includes('position') || endpoint.includes('risk') ? '持仓风控' : endpoint.includes('open') ? '开单分析' : value || '-' }
 function dataTypeText(value: string) { return value === 'kline' ? 'K 线' : value || '-' }
+function publicAiErrorText(value: string | undefined) {
+  const cleaned = String(value || '')
+    .replace(/\s*[;,]\s*model\s*=\s*[^,;\r\n]+/gi, '')
+    .replace(/\s*[;,]\s*url\s*=\s*https?:\/\/[^\s,;\r\n]+/gi, '')
+    .replace(/https?:\/\/[^\s,;\r\n]+/gi, '')
+    .replace(/[ \t]+([,;])/g, '$1')
+    .replace(/[,;]\s*$/gm, '')
+    .trim()
+  return cleaned || 'AI 调用失败，请稍后重试'
+}
 
 function RecentOrders({ orders: rows }: { orders: PortalOrder[] }) {
   if (!rows.length) return <EmptyState icon={<ReceiptText />} title="暂无历史订单" description="EA 同步成交记录后会显示在这里。" />
@@ -292,7 +375,7 @@ export function StrategiesPage() {
     {loading && !data ? <div className="permission-loading">正在加载策略...</div> : error && !data ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>策略加载失败</strong><span>{error}</span></div></div> : <div className="strategy-list">{filtered.length ? filtered.map((item) => <article className="strategy-row" key={item.id}>
       <div className="strategy-row-head">
         <div className="strategy-row-icon"><BrainCircuit /></div>
-        <div className="strategy-row-title"><h3>{item.name}</h3><span>GainLab 官方 · {item.strategy_code}</span></div>
+        <div className="strategy-row-title"><h3>{item.name}</h3><span>{item.strategy_code === 'CUSTOM_AI_V1' ? '自定义策略' : `GainLab 官方 · ${item.strategy_code}`}</span></div>
         <div className="strategy-row-actions">
           <StatusPill tone={statusTone(item.status)}>{statusText(item.status)}</StatusPill>
           <Menu position="bottom-end" withinPortal shadow="md">
@@ -335,17 +418,28 @@ export function StrategiesPage() {
 
 function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { editing?: boolean; deployment?: PortalStrategy; onSaved?: () => void; onCancel?: () => void }) {
   const navigate = useNavigate()
-  const [sizeMode, setSizeMode] = useState<'fixed' | 'risk'>(deployment?.position_size_mode === 'fixed' ? 'fixed' : 'risk')
+  const [strategySource, setStrategySource] = useState<'official' | 'custom'>(deployment?.strategy_code === 'CUSTOM_AI_V1' ? 'custom' : 'official')
+  const [sizeMode, setSizeMode] = useState<'fixed' | 'risk'>(deployment?.position_size_mode === 'risk' ? 'risk' : 'fixed')
   const [strategyName, setStrategyName] = useState(deployment?.name || 'GL 趋势自动分析策略')
   const [strategyStatus, setStrategyStatus] = useState(deployment?.status || 'active')
   const [mtLogin, setMtLogin] = useState(deployment?.mt_login || '')
+  const [eaDescription, setEaDescription] = useState(deployment?.ea_description || '')
   const [fixedVolume, setFixedVolume] = useState(String(deployment?.fixed_volume ?? 0.1))
   const [riskBaseMode, setRiskBaseMode] = useState<'fixed_loss' | 'balance_percent'>(deployment?.risk_base_mode === 'balance_percent' ? 'balance_percent' : 'fixed_loss')
   const [riskAmount, setRiskAmount] = useState(String(deployment?.risk_amount ?? 100))
   const [riskPercent, setRiskPercent] = useState(String(deployment?.risk_percent ?? 1))
   const [maxPositions, setMaxPositions] = useState(String(deployment?.max_positions ?? 1))
   const [allowAdd, setAllowAdd] = useState(Boolean(deployment?.allow_add))
-  const [customStrategyOpened, setCustomStrategyOpened] = useState(false)
+  const [openLogic, setOpenLogic] = useState(deployment?.open_logic || '')
+  const [positionLogic, setPositionLogic] = useState(deployment?.position_logic || '')
+  const [openDataType, setOpenDataType] = useState(deployment?.open_data_type || 'kline')
+  const [openKlineCount, setOpenKlineCount] = useState(String(deployment?.open_requested_kline_count || (Number(deployment?.open_kline_count) >= 10 ? deployment?.open_kline_count : 100) || 100))
+  const [positionDataType, setPositionDataType] = useState(deployment?.position_data_type || 'kline')
+  const [positionKlineCount, setPositionKlineCount] = useState(String(deployment?.position_requested_kline_count || (Number(deployment?.position_kline_count) >= 10 ? deployment?.position_kline_count : 100) || 100))
+  const [indicatorCatalog, setIndicatorCatalog] = useState<IndicatorCatalogItem[]>([])
+  const [indicatorsExpanded, setIndicatorsExpanded] = useState(false)
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorCatalogItem | null>(null)
+  const [dataHelpOpened, setDataHelpOpened] = useState(false)
   const [strategyDetailOpened, setStrategyDetailOpened] = useState(false)
   const [pricingOpened, setPricingOpened] = useState(false)
   const [pricingCategory, setPricingCategory] = useState('全部')
@@ -354,6 +448,8 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
   const [aiModelsLoading, setAiModelsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [customPreview, setCustomPreview] = useState<CustomStrategyPreview | null>(null)
+  const [pendingStrategyPayload, setPendingStrategyPayload] = useState<Record<string, unknown> | null>(null)
   const [openAi, setOpenAi] = useState<AiFormConfig>({
     mode: deployment?.open_ai_mode === 'custom' ? 'custom' : 'official',
     endpointId: deployment?.open_ai_endpoint_id || '',
@@ -362,6 +458,7 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
     baseUrl: deployment?.open_ai_base_url || '',
     apiKey: '',
     keyConfigured: Boolean(deployment?.open_ai_key_configured),
+    visionVerified: Boolean(deployment?.open_ai_vision_verified),
   })
   const [positionAi, setPositionAi] = useState<AiFormConfig>({
     mode: deployment?.position_ai_mode === 'custom' ? 'custom' : 'official',
@@ -371,6 +468,7 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
     baseUrl: deployment?.position_ai_base_url || '',
     apiKey: '',
     keyConfigured: Boolean(deployment?.position_ai_key_configured),
+    visionVerified: Boolean(deployment?.position_ai_vision_verified),
   })
   useEffect(() => {
     let active = true
@@ -385,6 +483,13 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
   }, [deployment?.strategy_code])
   useEffect(() => {
     let active = true
+    apiRequest<{ list: IndicatorCatalogItem[] }>('/api/v1/auth/custom-strategy/indicators')
+      .then((result) => { if (active) setIndicatorCatalog(result.list || []) })
+      .catch(() => { if (active) setIndicatorCatalog([]) })
+    return () => { active = false }
+  }, [])
+  useEffect(() => {
+    let active = true
     setAiModelsLoading(true)
     apiRequest<{ list: AiModelOption[] }>('/api/v1/auth/ai-model-options')
       .then((result) => {
@@ -394,10 +499,10 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
         const defaultOption = options.find((item) => item.is_default) || options[0]
         if (defaultOption) {
           setOpenAi((current) => current.mode === 'official' && !options.some((item) => item.id === current.endpointId)
-            ? { ...current, endpointId: defaultOption.id, model: defaultOption.model }
+            ? { ...current, endpointId: defaultOption.id, model: defaultOption.model, visionVerified: Boolean(defaultOption.supports_vision) }
             : current)
           setPositionAi((current) => current.mode === 'official' && !options.some((item) => item.id === current.endpointId)
-            ? { ...current, endpointId: defaultOption.id, model: defaultOption.model }
+            ? { ...current, endpointId: defaultOption.id, model: defaultOption.model, visionVerified: Boolean(defaultOption.supports_vision) }
             : current)
         }
       })
@@ -409,11 +514,11 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
     if (!libraryStrategy || !aiModelOptions.length || deployment?.ai_user_configured) return
     const openDefault = aiModelOptions.find((item) => item.id === libraryStrategy.open_ai_endpoint_id)
     const positionDefault = aiModelOptions.find((item) => item.id === libraryStrategy.position_ai_endpoint_id)
-    if (openDefault) setOpenAi((current) => ({ ...current, mode: 'official', endpointId: openDefault.id, model: openDefault.model }))
-    if (positionDefault) setPositionAi((current) => ({ ...current, mode: 'official', endpointId: positionDefault.id, model: positionDefault.model }))
+    if (openDefault) setOpenAi((current) => ({ ...current, mode: 'official', endpointId: openDefault.id, model: openDefault.model, visionVerified: Boolean(openDefault.supports_vision) }))
+    if (positionDefault) setPositionAi((current) => ({ ...current, mode: 'official', endpointId: positionDefault.id, model: positionDefault.model, visionVerified: Boolean(positionDefault.supports_vision) }))
   }, [aiModelOptions, deployment?.ai_user_configured, libraryStrategy])
   useEffect(() => {
-    if (deployment || !libraryStrategy) return
+    if (deployment || !libraryStrategy || strategySource === 'custom') return
     const config = libraryStrategy.default_config || {}
     const defaultSizeMode = config.position_sizing_mode || config.position_size_mode
     const defaultRiskMode = config.risk_mode || config.risk_base_mode
@@ -425,40 +530,24 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
     setRiskPercent(String(config.risk_percent ?? 1))
     setMaxPositions(String(config.max_positions ?? 1))
     setAllowAdd(Boolean(config.allow_add_position ?? config.allow_add ?? false))
-  }, [deployment, libraryStrategy])
+  }, [deployment, libraryStrategy, strategySource])
   const strategyTitle = libraryStrategy?.name || deployment?.name || 'GL 趋势自动分析策略'
   const strategyDescription = libraryStrategy?.summary || deployment?.summary || '暂无策略介绍。'
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
+  const customLogicChanged = !editing || !deployment
+    || openLogic.trim() !== String(deployment.open_logic || '').trim()
+    || positionLogic.trim() !== String(deployment.position_logic || '').trim()
+  const customNeedsCompilation = strategySource === 'custom' && (
+    customLogicChanged || Number(deployment?.rule_engine_version || 0) < 1
+  )
+  const saveStrategy = async (payload: Record<string, unknown>, compiledConfig?: CustomStrategyPreview) => {
     setSaving(true)
-    const payload = {
-      strategy_code: libraryStrategy?.code || deployment?.strategy_code || 'PA_AGENT_V1',
-      name: strategyName,
-      status: strategyStatus,
-      mt_login: mtLogin,
-      open_ai_mode: openAi.mode,
-      open_ai_endpoint_id: openAi.mode === 'official' ? openAi.endpointId : '',
-      open_ai_model: openAi.mode === 'custom' ? openAi.customModel : openAi.model,
-      open_ai_base_url: openAi.baseUrl,
-      open_ai_key: openAi.apiKey,
-      position_ai_mode: positionAi.mode,
-      position_ai_endpoint_id: positionAi.mode === 'official' ? positionAi.endpointId : '',
-      position_ai_model: positionAi.mode === 'custom' ? positionAi.customModel : positionAi.model,
-      position_ai_base_url: positionAi.baseUrl,
-      position_ai_key: positionAi.apiKey,
-      position_size_mode: sizeMode,
-      fixed_volume: Number(fixedVolume),
-      risk_base_mode: riskBaseMode,
-      risk_amount: Number(riskAmount),
-      risk_percent: Number(riskPercent),
-      max_positions: Number(maxPositions),
-      allow_add: allowAdd,
-    }
     try {
       await apiRequest<{ id: string; deployment_key?: string }>(editing && deployment ? `/api/v1/auth/strategies/${deployment.id}` : '/api/v1/auth/strategies', {
         method: editing ? 'PATCH' : 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(compiledConfig ? { ...payload, compiled_config: compiledConfig } : payload),
       })
+      setCustomPreview(null)
+      setPendingStrategyPayload(null)
       notifications.show({ title: editing ? '保存成功' : '创建成功', message: editing ? '策略配置已更新' : '策略 Key 已生成', color: 'gainlab', autoClose: 1800 })
       if (editing && deployment && onSaved) onSaved()
       else navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')
@@ -468,18 +557,127 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
       setSaving(false)
     }
   }
-  return <form className="strategy-form" onSubmit={submit}>
-    <div className="strategy-source-switch panel" role="group" aria-label="策略来源"><button className="active" type="button"><BrainCircuit size={17} />GL策略库</button><button type="button" onClick={() => setCustomStrategyOpened(true)}><Sparkles size={17} />自定义策略</button></div>
-    <section className="panel form-section"><div className="form-section-title"><span>01</span><div><h2>选择GL策略</h2><p>当前可选择已经配置完成的 GL 策略。</p></div></div><label className="library-option selected"><input type="radio" defaultChecked /><strong>{strategyTitle}</strong><button className="library-detail-button" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setStrategyDetailOpened(true) }}>查看详情<ChevronRight size={15} /></button><Check /></label></section>
-    <section className="panel form-section"><div className="form-section-title"><span>02</span><div><h2>基础设置</h2><p>为这个部署设置容易识别的名称和运行状态。</p></div></div><div className="form-grid"><label><span>策略名称</span><input value={strategyName} onChange={(event) => setStrategyName(event.target.value)} /></label><label><span>运行状态</span><Select className="app-mantine-select" value={strategyStatus} onChange={(value) => setStrategyStatus(value || 'active')} data={[{ value: 'active', label: '运行中' }, { value: 'paused', label: '暂停' }]} allowDeselect={false} /></label><label className="mt-login-field"><span>绑定 MT4/MT5 账号</span><input value={mtLogin} onChange={(event) => setMtLogin(event.target.value)} inputMode="numeric" placeholder="留空则在首次连接时自动绑定" /><small>{mtLogin ? (editing ? '此 Key 只允许该 MT 账号使用；可以修改或清空后重新绑定。' : '创建后，此 Key 只允许该 MT 账号使用。') : '留空时，MT 首次连接会自动绑定上传的账号。'}</small></label></div></section>
-    <section className="panel form-section"><div className="form-section-title"><span>03</span><div><h2>AI 模型</h2><p>开单和持仓风控可以分别选择 GL 提供的模型或配置自己的 AI 接口。</p></div></div><div className="form-grid two-cards"><AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} /><AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} /></div></section>
-    <section className="panel form-section"><div className="form-section-title"><span>04</span><div><h2>仓位和风险</h2><p>服务端会在返回订单前按照此处规则计算最终手数。</p></div></div><div className="segmented"><button type="button" className={sizeMode === 'fixed' ? 'active' : ''} onClick={() => setSizeMode('fixed')}>固定手数</button><button type="button" className={sizeMode === 'risk' ? 'active' : ''} onClick={() => setSizeMode('risk')}>以损定仓</button></div>{sizeMode === 'fixed' ? <div className="form-grid"><label><span>每次开单手数</span><input type="number" min="0.01" value={fixedVolume} onChange={(event) => setFixedVolume(event.target.value)} step="0.01" /></label><label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div> : <><div className="form-grid risk-mode-grid"><label><span>风险计算方式</span><Select className="app-mantine-select" value={riskBaseMode} onChange={(value) => setRiskBaseMode(value === 'balance_percent' ? 'balance_percent' : 'fixed_loss')} data={[{ value: 'fixed_loss', label: '固定止损金额' }, { value: 'balance_percent', label: '余额比例止损' }]} allowDeselect={false} /></label>{riskBaseMode === 'fixed_loss' ? <label><span>每单最大风险金额</span><div className="suffix-input"><input type="number" min="0" value={riskAmount} onChange={(event) => setRiskAmount(event.target.value)} /><span>USD</span></div></label> : <label><span>单笔风险占余额比例</span><div className="suffix-input"><input type="number" min="0.01" step="0.1" value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} /><span>%</span></div></label>}<label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div><p className="risk-mode-note">以损定仓需要策略返回有效止损价；没有止损价时，服务端会回退到固定手数或拒绝下单。</p></>}<label className="toggle-row"><div><strong>允许策略加仓</strong><small>仅在策略返回明确加仓动作且未超过持仓上限时执行</small></div><input type="checkbox" checked={allowAdd} onChange={(event) => setAllowAdd(event.target.checked)} /></label></section>
-    <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => editing && onCancel ? onCancel() : navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')}>取消</button><button className="button button-primary" type="submit" disabled={saving || aiModelsLoading || !libraryStrategy}>{saving ? editing ? '正在保存...' : '正在创建...' : editing ? '保存修改' : '创建并生成 Key'}{!saving && <ArrowRight size={17} />}</button></div>
-    <Modal opened={customStrategyOpened} onClose={() => setCustomStrategyOpened(false)} title="自定义策略" centered classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
-      <div className="strategy-unavailable-content"><div><Sparkles size={24} /></div><h3>暂未开放</h3><p>自定义策略功能正在开发中，后续开放后可使用自然语言创建自己的策略。</p><button className="button button-primary" type="button" onClick={() => setCustomStrategyOpened(false)}>我知道了</button></div>
-    </Modal>
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (saving) return
+    if (strategySource === 'custom') {
+      const missingVision = [
+        { label: '开单分析 AI', dataType: openDataType, ai: openAi },
+        { label: '持仓风控 AI', dataType: positionDataType, ai: positionAi },
+      ].find((item) => (item.dataType === 'screenshot' || item.dataType === 'both') && !item.ai.visionVerified)
+      if (missingVision) {
+        notifications.show({ title: '请先测试图片识别', message: `${missingVision.label} 需要处理截图，请先通过图片识别测试。`, color: 'red', autoClose: 6000 })
+        return
+      }
+    }
+    const payload = {
+      deployment_id: deployment?.id || '',
+      strategy_code: strategySource === 'custom' ? 'CUSTOM_AI_V1' : (libraryStrategy?.code || deployment?.strategy_code || 'PA_AGENT_V1'),
+      name: strategyName,
+      status: strategyStatus,
+      mt_login: mtLogin,
+      ea_description: strategySource === 'custom' ? eaDescription.trim() : '',
+      open_ai_mode: openAi.mode,
+      open_ai_endpoint_id: openAi.mode === 'official' ? openAi.endpointId : '',
+      open_ai_model: openAi.mode === 'custom' ? openAi.customModel : openAi.model,
+      open_ai_base_url: openAi.baseUrl,
+      open_ai_key: openAi.apiKey,
+      open_ai_vision_verified: openAi.visionVerified,
+      position_ai_mode: positionAi.mode,
+      position_ai_endpoint_id: positionAi.mode === 'official' ? positionAi.endpointId : '',
+      position_ai_model: positionAi.mode === 'custom' ? positionAi.customModel : positionAi.model,
+      position_ai_base_url: positionAi.baseUrl,
+      position_ai_key: positionAi.apiKey,
+      position_ai_vision_verified: positionAi.visionVerified,
+      position_size_mode: sizeMode,
+      fixed_volume: Number(fixedVolume),
+      risk_base_mode: riskBaseMode,
+      risk_amount: Number(riskAmount),
+      risk_percent: Number(riskPercent),
+      max_positions: Number(maxPositions),
+      allow_add: allowAdd,
+      open_logic: strategySource === 'custom' ? openLogic.trim() : '',
+      position_logic: strategySource === 'custom' ? positionLogic.trim() : '',
+      open_data_type: openDataType,
+      open_kline_count: Number(openKlineCount),
+      position_data_type: positionDataType,
+      position_kline_count: Number(positionKlineCount),
+    }
+    if (strategySource === 'custom') {
+      if (!customNeedsCompilation) {
+        await saveStrategy(payload)
+        return
+      }
+      setSaving(true)
+      try {
+        const preview = await apiRequest<CustomStrategyPreview>('/api/v1/auth/custom-strategy/preview', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        setPendingStrategyPayload(payload)
+        setCustomPreview(preview)
+      } catch (reason) {
+        notifications.show({ title: '策略分析失败', message: reason instanceof Error ? reason.message : 'AI 无法生成策略配置，请稍后重试', color: 'red' })
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    await saveStrategy(payload)
+  }
+  const savingMessage = customPreview
+    ? '正在保存策略配置...'
+    : customNeedsCompilation
+      ? 'AI 正在分析策略，请稍候...'
+      : editing
+        ? '正在保存策略修改...'
+        : '正在创建策略并生成 Key...'
+  return <form className="strategy-form" onSubmit={submit} aria-busy={saving}>
+    {saving && <div className="strategy-saving-overlay" role="status" aria-live="polite"><div><Loader color="teal" size="md" /><strong>{savingMessage}</strong><span>处理完成前请不要关闭页面</span></div></div>}
+    <div className="strategy-source-switch panel" role="group" aria-label="策略来源"><button className={strategySource === 'official' ? 'active' : ''} type="button" disabled={editing} onClick={() => { setStrategySource('official'); if (!deployment && libraryStrategy) setStrategyName(libraryStrategy.name) }}><BrainCircuit size={17} />GL策略库</button><button className={strategySource === 'custom' ? 'active' : ''} type="button" disabled={editing} onClick={() => { setStrategySource('custom'); if (!deployment) setStrategyName('我的自定义策略') }}><Sparkles size={17} />自定义策略</button></div>
+    {strategySource === 'official' ? <section className="panel form-section"><div className="form-section-title"><span>01</span><div><h2>选择GL策略</h2><p>当前可选择已经配置完成的 GL 策略。</p></div></div><label className="library-option selected"><input type="radio" defaultChecked /><strong>{strategyTitle}</strong><button className="library-detail-button" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setStrategyDetailOpened(true) }}>查看详情<ChevronRight size={15} /></button><Check /></label></section> : <section className="panel form-section custom-strategy-rules"><div className="form-section-title"><span>01</span><div><h2>填写策略逻辑</h2><p>使用自然语言写清开仓和持仓风控规则，保存时 AI 会生成运行模板并提取需要计算的指标。</p></div></div><div className="custom-rule-grid"><label><span>开仓逻辑</span><textarea value={openLogic} onChange={(event) => setOpenLogic(event.target.value)} placeholder="例如：连续10根K线下降，随后出现看涨吞没或看涨 Pin Bar 时开多，止损设为近期最低价。" rows={7} /><small>请写明方向、触发条件，以及需要时的止损和止盈规则。</small></label><label><span>持仓风控逻辑</span><textarea value={positionLogic} onChange={(event) => setPositionLogic(event.target.value)} placeholder="例如：出现明确的看跌吞没时平仓；盈利后止损移动到最近3根K线最低价；没有触发条件时继续持有。" rows={7} /><small>可使用持有、平仓、加仓、修改止盈止损；部分平仓可写明数量或比例。</small></label></div><div className={`indicator-catalog${indicatorsExpanded ? ' expanded' : ''}`}><button className="indicator-catalog-toggle" type="button" aria-expanded={indicatorsExpanded} onClick={() => setIndicatorsExpanded((value) => !value)}><span><strong>可用的内置指标说明</strong><small>当前支持 {indicatorCatalog.length || 49} 个常用技术指标</small></span><ChevronRight size={18} /></button>{indicatorsExpanded && <div className="indicator-catalog-content"><p>系统采用 Pandas TA Classic 计算策略实际使用的技术指标；K线形态、连续涨跌和近期高低点由 AI 直接根据 OHLC 数据判断。点击指标可查看可选参数。</p><div>{indicatorCatalog.map((item) => <button key={item.name} type="button" title={`查看 ${item.title} 参数`} onClick={() => setSelectedIndicator(item)}>{item.title}</button>)}</div></div>}</div>{Boolean(deployment?.unsupported_indicators?.length) && <div className="custom-indicator-warning"><ShieldCheck size={16} /><span>以下指标暂不能自动计算，需要后续通过截图提供：{deployment?.unsupported_indicators?.join('、')}</span></div>}</section>}
+    {strategySource === 'custom' && <section className="panel form-section"><div className="form-section-title"><span>02</span><div><div className="form-title-with-help"><h2>EA提供数据设置</h2><button type="button" aria-label="查看EA提供数据说明" onClick={() => setDataHelpOpened(true)}>?</button></div><p>设置开仓分析和持仓风控时 EA 提供给 AI 的数据。</p></div></div><div className="data-requirement-grid"><DataRequirementCard title="开仓分析数据" dataType={openDataType} klineCount={openKlineCount} onDataTypeChange={setOpenDataType} onKlineCountChange={setOpenKlineCount} /><DataRequirementCard title="持仓风控数据" dataType={positionDataType} klineCount={positionKlineCount} onDataTypeChange={setPositionDataType} onKlineCountChange={setPositionKlineCount} /></div></section>}
+    <section className="panel form-section">
+      <div className="form-section-title"><span>{strategySource === 'custom' ? '03' : '02'}</span><div><h2>基础设置</h2><p>为这个部署设置容易识别的名称和运行状态。</p></div></div>
+      <div className="form-grid">
+        <label><span>策略名称</span><input value={strategyName} onChange={(event) => setStrategyName(event.target.value)} /></label>
+        <label><span>运行状态</span><Select className="app-mantine-select" value={strategyStatus} onChange={(value) => setStrategyStatus(value || 'active')} data={[{ value: 'active', label: '运行中' }, { value: 'paused', label: '暂停' }]} allowDeselect={false} /></label>
+        {strategySource === 'custom' && <label className="strategy-description-field"><span>策略说明</span><textarea value={eaDescription} onChange={(event) => setEaDescription(event.target.value)} maxLength={1000} rows={3} placeholder="例如：黄金15分钟趋势策略，EA连接后会显示此说明" /></label>}
+        <label className="mt-login-field"><span>绑定 MT4/MT5 账号</span><input value={mtLogin} onChange={(event) => setMtLogin(event.target.value)} inputMode="numeric" placeholder="留空则在首次连接时自动绑定" /><small>{mtLogin ? (editing ? '此 Key 只允许该 MT 账号使用；可以修改或清空后重新绑定。' : '创建后，此 Key 只允许该 MT 账号使用。') : '留空时，MT 首次连接会自动绑定上传的账号。'}</small></label>
+      </div>
+    </section>
+    <section className="panel form-section"><div className="form-section-title"><span>{strategySource === 'custom' ? '04' : '03'}</span><div><h2>AI 模型</h2><p>开单和持仓风控可以分别选择 GL 提供的模型或配置自己的 AI 接口。带有图片图标的模型支持截图识别。</p></div></div><div className="form-grid two-cards"><AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} /><AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} /></div></section>
+    <section className="panel form-section"><div className="form-section-title"><span>{strategySource === 'custom' ? '05' : '04'}</span><div><h2>仓位和风险</h2><p>服务端会在返回订单前按照此处规则计算最终手数。</p></div></div><div className="segmented"><button type="button" className={sizeMode === 'fixed' ? 'active' : ''} onClick={() => setSizeMode('fixed')}>固定手数</button><button type="button" className={sizeMode === 'risk' ? 'active' : ''} onClick={() => setSizeMode('risk')}>以损定仓</button></div>{sizeMode === 'fixed' ? <div className="form-grid"><label><span>每次开单手数</span><input type="number" min="0.01" value={fixedVolume} onChange={(event) => setFixedVolume(event.target.value)} step="0.01" /></label><label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div> : <><div className="form-grid risk-mode-grid"><label><span>风险计算方式</span><Select className="app-mantine-select" value={riskBaseMode} onChange={(value) => setRiskBaseMode(value === 'balance_percent' ? 'balance_percent' : 'fixed_loss')} data={[{ value: 'fixed_loss', label: '固定止损金额' }, { value: 'balance_percent', label: '余额比例止损' }]} allowDeselect={false} /></label>{riskBaseMode === 'fixed_loss' ? <label><span>每单最大风险金额</span><div className="suffix-input"><input type="number" min="0" value={riskAmount} onChange={(event) => setRiskAmount(event.target.value)} /><span>USD</span></div></label> : <label><span>单笔风险占余额比例</span><div className="suffix-input"><input type="number" min="0.01" step="0.1" value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} /><span>%</span></div></label>}<label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div><p className="risk-mode-note">以损定仓需要策略返回有效止损价；没有止损价时，服务端会回退到固定手数或拒绝下单。</p></>}<label className="toggle-row"><div><strong>允许策略加仓</strong><small>仅在策略返回明确加仓动作且未超过持仓上限时执行</small></div><input type="checkbox" checked={allowAdd} onChange={(event) => setAllowAdd(event.target.checked)} /></label></section>
+    <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => editing && onCancel ? onCancel() : navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')}>取消</button><button className="button button-primary" type="submit" disabled={saving || aiModelsLoading || (strategySource === 'official' && !libraryStrategy) || (strategySource === 'custom' && (openLogic.trim().length < 5 || positionLogic.trim().length < 5))}>{saving ? customNeedsCompilation ? 'AI 正在分析策略...' : editing ? '正在保存...' : '正在创建...' : customNeedsCompilation ? '生成策略配置' : editing ? '保存修改' : '创建并生成 Key'}{!saving && <ArrowRight size={17} />}</button></div>
     <Modal opened={strategyDetailOpened} onClose={() => setStrategyDetailOpened(false)} title="策略说明" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
       <div className="strategy-library-detail"><h3>{strategyTitle}</h3><p>{strategyDescription.replace(/\\n/g, '\n')}</p><button className="button button-primary" type="button" onClick={() => setStrategyDetailOpened(false)}>关闭</button></div>
+    </Modal>
+    <Modal opened={Boolean(customPreview)} onClose={() => { if (saving) return; setCustomPreview(null); setPendingStrategyPayload(null) }} closeOnClickOutside={!saving} closeOnEscape={!saving} title="确认策略分析结果" centered size="xl" classNames={{ content: 'custom-preview-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+      {customPreview && <div className="custom-preview-content">
+        <p className="custom-preview-lead">AI 已根据自然语言生成运行配置。请确认规则理解、指标和数据需求，确认后才会正式保存并生成 Key。</p>
+        <section><h3>策略理解</h3><p>{customPreview.summary || 'AI 未提供策略摘要，请重点检查下方提示词模板。'}</p></section>
+        <div className="custom-preview-columns">
+          {(['open', 'position'] as const).map((prefix) => {
+            const isOpen = prefix === 'open'
+            const indicators = isOpen ? customPreview.open_indicators : customPreview.position_indicators
+            const requested = isOpen ? customPreview.open_requested_kline_count : customPreview.position_requested_kline_count
+            const required = isOpen ? customPreview.open_indicator_kline_count : customPreview.position_indicator_kline_count
+            const effective = isOpen ? customPreview.open_kline_count : customPreview.position_kline_count
+            const rulePlan = isOpen ? customPreview.open_rule_plan : customPreview.position_rule_plan
+            return <section key={prefix}><h3>{isOpen ? '开仓分析' : '持仓风控'}</h3><div className={`rule-execution-mode ${rulePlan?.mode === 'deterministic' ? 'deterministic' : 'ai'}`}><strong>{rulePlan?.mode === 'deterministic' ? '精确规则执行' : 'AI 判断'}</strong><span>{rulePlan?.mode === 'deterministic' ? '条件和价格由服务端计算，AI生成分析说明' : '当前规则需要由AI结合运行数据判断'}</span></div>{rulePlan?.mode === 'deterministic' && rulePlan.rules.length > 0 && <ol className="compiled-rule-list">{rulePlan.rules.map((rule, index) => <li key={`${prefix}-${index}`}>{rule.description || `规则 ${index + 1}`}</li>)}</ol>}<dl><div><dt>内置指标</dt><dd>{indicators.length ? indicators.map((item) => item.alias || item.name).join('、') : '无需额外指标'}</dd></div><div><dt>K线数量</dt><dd>{effective} 根 <small>（用户设置 {requested}，指标至少需要 {required}）</small></dd></div></dl></section>
+          })}
+        </div>
+        {(customPreview.unsupported_indicators.length > 0 || customPreview.warnings.length > 0) && <section className="custom-preview-warnings"><h3>需要注意</h3>{customPreview.unsupported_indicators.length > 0 && <p>暂不支持自动计算：{customPreview.unsupported_indicators.join('、')}</p>}{customPreview.warnings.length > 0 && <ul>{customPreview.warnings.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>}</section>}
+        <details><summary>查看开仓提示词模板</summary><pre>{customPreview.open_prompt_template}</pre></details>
+        <details><summary>查看持仓风控提示词模板</summary><pre>{customPreview.position_prompt_template}</pre></details>
+        <div className="custom-preview-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => { setCustomPreview(null); setPendingStrategyPayload(null) }}>返回修改</button><button className="button button-primary" type="button" disabled={saving || !pendingStrategyPayload} onClick={() => pendingStrategyPayload && void saveStrategy(pendingStrategyPayload, customPreview)}>{saving ? '正在保存...' : editing ? '确认并保存修改' : '确认创建并生成 Key'}<ArrowRight size={17} /></button></div>
+      </div>}
+    </Modal>
+    <Modal opened={Boolean(selectedIndicator)} onClose={() => setSelectedIndicator(null)} title="指标说明" centered size="md" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+      {selectedIndicator && <div className="indicator-detail-modal"><div className="indicator-detail-title"><span>{selectedIndicator.name.toUpperCase()}</span><h3>{selectedIndicator.title}</h3>{selectedIndicator.name === 'sma' && <p>策略中写 MA 时按 SMA 计算。</p>}</div><section><span>可选参数</span><div className="indicator-parameter-list">{selectedIndicator.parameters.map((parameter) => <article key={parameter.name}><div><strong>{parameter.label}</strong><code>{parameter.name}</code></div><b>默认值：{parameter.default}</b></article>)}</div></section>{indicatorSourceOptions(selectedIndicator).length > 0 && <section><span>可选数据源</span><div className="indicator-source-list">{indicatorSourceOptions(selectedIndicator).map((source) => <article key={source.value}><strong>{source.label}</strong><code>{source.formula}</code></article>)}</div></section>}<button className="button button-primary" type="button" onClick={() => setSelectedIndicator(null)}>关闭</button></div>}
+    </Modal>
+    <Modal opened={dataHelpOpened} onClose={() => setDataHelpOpened(false)} title="EA提供数据说明" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+      <div className="ea-data-help"><p>开仓分析和持仓风控可以分别设置，按策略实际需要选择即可。</p><div><article><strong>K线</strong><span>适合均线、指标、价格高低点、连续涨跌和常见K线形态等规则。数据便于精确计算，输入 Token 相对较少，通常优先选择。</span></article><article><strong>截图</strong><span>适合图表中的自定义指标、画线、特殊图形或无法由系统计算的内容。所选 AI 必须支持图片识别，图片会产生额外输入 Token。</span></article><article><strong>K线 + 截图</strong><span>适合同时需要精确数值计算和图表视觉判断的策略，信息最完整，但输入 Token 和调用成本通常也最高。</span></article></div><section><strong>Token 提示</strong><ul><li>K线数量越多，输入 Token 越多；满足策略判断需要即可。</li><li>截图尺寸、清晰度和模型的图片计费方式都会影响 Token。</li><li>开仓与持仓风控可使用不同设置，不需要统一选择。</li></ul></section><button className="button button-primary" type="button" onClick={() => setDataHelpOpened(false)}>关闭</button></div>
     </Modal>
     <Modal opened={pricingOpened} onClose={() => setPricingOpened(false)} title="GL AI 收费标准" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
       <div className="ai-pricing-modal"><p>以下价格为平台实际计费标准，单位：元 / 百万 Token。</p><div className="ai-model-category-tabs"><button className={pricingCategory === '全部' ? 'active' : ''} type="button" onClick={() => setPricingCategory('全部')}>全部</button>{aiModelCategories(aiModelOptions).map((category) => <button key={category} className={pricingCategory === category ? 'active' : ''} type="button" onClick={() => setPricingCategory(category)}>{category}</button>)}</div><div className="table-wrap"><table><thead><tr><th>模型</th><th>输入价格</th><th>输出价格</th></tr></thead><tbody>{aiModelOptions.filter((item) => pricingCategory === '全部' || aiModelCategory(item.provider_name) === pricingCategory).map((item) => <tr key={item.id}><td><strong>{item.provider_name}</strong></td><td>¥{money(item.input_price_per_million)}</td><td>¥{money(item.output_price_per_million)}</td></tr>)}</tbody></table></div><small>每次调用按照实际输入和输出 Token 分别计算费用，最终从账户余额中实时扣除。</small><button className="button button-primary" type="button" onClick={() => setPricingOpened(false)}>关闭</button></div>
@@ -488,6 +686,17 @@ function StrategyForm({ editing = false, deployment, onSaved, onCancel }: { edit
       <div className="custom-ai-help"><p>当前支持 OpenAI Chat Completions 兼容结构。OpenAI、DeepSeek、通义千问兼容模式以及多数中转服务商通常都可以使用。</p><h3>请求结构示例</h3><pre>{'{\n  "model": "gpt-4o",\n  "messages": [\n    { "role": "system", "content": "..." },\n    { "role": "user", "content": "..." }\n  ],\n  "temperature": 0.2\n}'}</pre><p>请确认服务商接口支持以上 JSON 请求结构，并支持 Bearer API Key 鉴权；不兼容此结构的接口暂时无法接入。</p><button className="button button-primary" type="button" onClick={() => setCustomAiHelpOpened(false)}>关闭</button></div>
     </Modal>
   </form>
+}
+
+function DataRequirementCard({ title, dataType, klineCount, onDataTypeChange, onKlineCountChange }: {
+  title: string
+  dataType: string
+  klineCount: string
+  onDataTypeChange: (value: string) => void
+  onKlineCountChange: (value: string) => void
+}) {
+  const usesKline = dataType === 'kline' || dataType === 'both'
+  return <div className="data-requirement-card"><strong>{title}</strong><label><span>数据类型</span><Select className="app-mantine-select" value={dataType} onChange={(value) => onDataTypeChange(value || 'kline')} data={[{ value: 'kline', label: 'K线' }, { value: 'screenshot', label: '截图' }, { value: 'both', label: 'K线 + 截图' }]} allowDeselect={false} /></label>{usesKline && <label><span>K线数量</span><input type="number" min="10" max="1000" step="10" value={klineCount} onChange={(event) => onKlineCountChange(event.target.value)} /><small>允许设置 10～1000 根；指标计算需要更多历史数据时，系统会自动增加 EA 请求数量。</small></label>}</div>
 }
 
 function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPricing, onShowCustomHelp, onChange }: {
@@ -501,10 +710,12 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
   onChange: (next: AiFormConfig) => void
 }) {
   const [testing, setTesting] = useState(false)
+  const [testingVision, setTestingVision] = useState(false)
   const [testResult, setTestResult] = useState<AiConnectionTestResult | null>(null)
+  const [testResultType, setTestResultType] = useState<'connection' | 'vision'>('connection')
   const selectOfficial = (endpointId: string | null) => {
     const option = options.find((item) => item.id === endpointId)
-    if (option) onChange({ ...value, endpointId: option.id, model: option.model })
+    if (option) onChange({ ...value, endpointId: option.id, model: option.model, visionVerified: Boolean(option.supports_vision && option.vision_test_status === 'passed') })
   }
   const testCustomAi = async () => {
     if (!value.baseUrl.trim() || !value.customModel.trim() || !value.apiKey.trim()) {
@@ -529,6 +740,7 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
         notifications.show({ title: '连接测试失败', message: result.error || '模型接口未能正常响应', color: 'red', autoClose: 8000 })
         return
       }
+      setTestResultType('connection')
       setTestResult(result)
     } catch (reason) {
       notifications.show({ title: '连接测试失败', message: reason instanceof Error ? reason.message : '模型接口未能正常响应', color: 'red', autoClose: 8000 })
@@ -536,24 +748,54 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
       setTesting(false)
     }
   }
+  const testCustomAiVision = async () => {
+    if (!value.baseUrl.trim() || !value.customModel.trim() || !value.apiKey.trim()) {
+      notifications.show({
+        title: '请完整填写测试配置',
+        message: value.keyConfigured && !value.apiKey.trim() ? '为保护密钥安全，测试已有配置时请重新输入 API Key。' : '请输入 Base URL、模型名称和 API Key。',
+        color: 'red',
+      })
+      return
+    }
+    setTestingVision(true)
+    try {
+      const result = await apiRequest<AiConnectionTestResult>('/api/v1/auth/custom-ai/test-vision', {
+        method: 'POST',
+        body: JSON.stringify({ base_url: value.baseUrl.trim(), model: value.customModel.trim(), api_key: value.apiKey.trim() }),
+      })
+      if (!result.success) {
+        onChange({ ...value, visionVerified: false })
+        notifications.show({ title: '图片识别测试失败', message: result.error || '模型未能正确识别测试图片', color: 'red', autoClose: 8000 })
+        return
+      }
+      onChange({ ...value, visionVerified: true })
+      setTestResultType('vision')
+      setTestResult(result)
+    } catch (reason) {
+      onChange({ ...value, visionVerified: false })
+      notifications.show({ title: '图片识别测试失败', message: reason instanceof Error ? reason.message : '模型未能正确识别测试图片', color: 'red', autoClose: 8000 })
+    } finally {
+      setTestingVision(false)
+    }
+  }
   return <div className="ai-select">
     <div className="ai-select-title"><BrainCircuit /><strong>{title}</strong></div>
     <div className="segmented compact">
-      <button className={value.mode === 'official' ? 'active' : ''} type="button" onClick={() => onChange({ ...value, mode: 'official' })}>GL提供AI</button>
-      <button className={value.mode === 'custom' ? 'active' : ''} type="button" onClick={() => onChange({ ...value, mode: 'custom' })}>自定义AI</button>
+      <button className={value.mode === 'official' ? 'active' : ''} type="button" onClick={() => { const option = options.find((item) => item.id === value.endpointId); onChange({ ...value, mode: 'official', visionVerified: Boolean(option?.supports_vision && option?.vision_test_status === 'passed') }) }}>GL提供AI</button>
+      <button className={value.mode === 'custom' ? 'active' : ''} type="button" onClick={() => onChange({ ...value, mode: 'custom', visionVerified: value.mode === 'custom' && value.visionVerified })}>自定义AI</button>
     </div>
     {value.mode === 'official' ? <>
-      <label><span>选择模型</span><Select className="app-mantine-select" value={value.endpointId || null} onChange={selectOfficial} data={groupedAiModelOptions(options, defaultEndpointId)} placeholder={loading ? '正在加载模型...' : '请选择模型'} disabled={loading || options.length === 0} allowDeselect={false} searchable /></label>
-      <div className="ai-price"><Coins size={15} /><span>{options.length ? '按实际输入、输出 Token 和模型价格计费' : loading ? '正在读取模型配置...' : '暂无可用的 GL AI 模型'}</span>{options.length > 0 && <button type="button" onClick={onShowPricing}>查看收费标准</button>}</div>
+      <label><span>选择模型</span><Select className={`app-mantine-select ai-model-vision-select${value.visionVerified ? ' has-vision-icon' : ''}`} value={value.endpointId || null} onChange={selectOfficial} data={groupedAiModelOptions(options, defaultEndpointId)} placeholder={loading ? '正在加载模型...' : '请选择模型'} disabled={loading || options.length === 0} allowDeselect={false} searchable leftSection={value.visionVerified ? <ImageIcon className="ai-model-vision-icon supported" size={15} /> : null} renderOption={({ option }) => { const modelOption = options.find((item) => item.id === option.value); const supportsVision = Boolean(modelOption?.supports_vision && modelOption?.vision_test_status === 'passed'); return <div className="ai-model-select-option"><span>{option.label}</span>{supportsVision && <ImageIcon className="ai-model-vision-icon supported" size={15} aria-label="支持图片" />}</div> }} /></label>
+      <div className="ai-price"><Coins size={15} /><span>{options.length ? <><span>按实际 Token 用量和模型价格计费</span><small>价格可能随模型服务商调整</small></> : loading ? '正在读取模型配置...' : '暂无可用的 GL AI 模型'}</span>{options.length > 0 && <button type="button" onClick={onShowPricing}>查看收费标准</button>}</div>
     </> : <div className="custom-ai-fields">
       <label><span>接口类型</span><div className="custom-ai-type">OpenAI 兼容接口</div></label>
-      <label><span>Base URL</span><input value={value.baseUrl} onChange={(event) => onChange({ ...value, baseUrl: event.target.value })} placeholder="例如 https://api.openai.com/v1，也支持完整接口地址" /></label>
-      <label><span>模型名称</span><input value={value.customModel} onChange={(event) => onChange({ ...value, customModel: event.target.value })} placeholder="例如 gpt-4o / deepseek-chat / qwen-plus" /></label>
-      <label><span>API Key</span><input type="password" value={value.apiKey} onChange={(event) => onChange({ ...value, apiKey: event.target.value })} placeholder={value.keyConfigured ? '已配置，留空表示不修改' : '请输入 API Key'} autoComplete="new-password" /></label>
-      <div className="custom-ai-note"><ShieldCheck size={15} /><span>API Key 会通过 Authorization: Bearer 请求头发送，不会写入 JSON；使用自定义 AI 不扣除平台余额。</span><div className="custom-ai-note-actions"><button type="button" onClick={onShowCustomHelp}>查看接口说明</button><button className="custom-ai-test-button" type="button" disabled={testing} onClick={testCustomAi}><Zap size={13} />{testing ? '测试中...' : '测试连接'}</button></div></div>
+      <label><span>Base URL</span><input value={value.baseUrl} onChange={(event) => onChange({ ...value, baseUrl: event.target.value, visionVerified: false })} placeholder="例如 https://api.openai.com/v1，也支持完整接口地址" /></label>
+      <label><span>模型名称</span><input value={value.customModel} onChange={(event) => onChange({ ...value, customModel: event.target.value, visionVerified: false })} placeholder="例如 gpt-4o / deepseek-chat / qwen-plus" /></label>
+      <label><span>API Key</span><input type="password" value={value.apiKey} onChange={(event) => onChange({ ...value, apiKey: event.target.value, visionVerified: false })} placeholder={value.keyConfigured ? '已配置，留空表示不修改' : '请输入 API Key'} autoComplete="new-password" /></label>
+      <div className="custom-ai-note"><ShieldCheck size={15} /><span>{value.visionVerified ? '图片识别测试已通过；修改接口配置后需要重新测试。' : 'API Key 通过请求头发送；选择截图数据时需要先通过图片识别测试。'}</span><div className="custom-ai-note-actions"><button type="button" onClick={onShowCustomHelp}>查看接口说明</button><button className="custom-ai-test-button" type="button" disabled={testing || testingVision} onClick={testCustomAi}><Zap size={13} />{testing ? '测试中...' : '测试连接'}</button><button className="custom-ai-test-button" type="button" disabled={testing || testingVision} onClick={testCustomAiVision}><Zap size={13} />{testingVision ? '识别中...' : '测试图片识别'}</button></div></div>
     </div>}
-    <Modal opened={Boolean(testResult)} onClose={() => setTestResult(null)} title="模型连接测试成功" centered classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
-      {testResult && <div className="custom-ai-test-result"><div className="custom-ai-test-success"><Check size={22} /></div><p><span>模型</span><strong>{testResult.model || value.customModel}</strong></p><p><span>响应耗时</span><strong>{Number(testResult.elapsed_ms || 0)} ms</strong></p><p><span>Token 用量</span><strong>输入 {Number(testResult.prompt_tokens || 0)} / 输出 {Number(testResult.completion_tokens || 0)} / 合计 {Number(testResult.total_tokens || 0)}</strong></p><div><span>返回内容</span><pre>{testResult.response_preview || '-'}</pre></div><small>本次仅测试接口连通性，不扣除平台余额，也不会写入 AI 使用流水；AI 服务商可能收取少量请求费用。</small><button className="button button-primary" type="button" onClick={() => setTestResult(null)}>关闭</button></div>}
+    <Modal opened={Boolean(testResult)} onClose={() => setTestResult(null)} title={testResultType === 'vision' ? '图片识别测试成功' : '模型连接测试成功'} centered classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+      {testResult && <div className="custom-ai-test-result"><div className="custom-ai-test-success"><Check size={22} /></div><p><span>模型</span><strong>{testResult.model || value.customModel}</strong></p>{testResultType === 'vision' && <p><span>识别结果</span><strong>红色圆形、蓝色方形（正确）</strong></p>}<p><span>响应耗时</span><strong>{Number(testResult.elapsed_ms || 0)} ms</strong></p><p><span>Token 用量</span><strong>输入 {Number(testResult.prompt_tokens || 0)} / 输出 {Number(testResult.completion_tokens || 0)} / 合计 {Number(testResult.total_tokens || 0)}</strong></p><div><span>返回内容</span><pre>{testResult.response_preview || '-'}</pre></div><small>本次仅用于能力测试，不扣除平台余额，也不会写入 AI 使用流水；AI 服务商可能收取少量请求费用。</small><button className="button button-primary" type="button" onClick={() => setTestResult(null)}>关闭</button></div>}
     </Modal>
   </div>
 }
@@ -593,9 +835,10 @@ export function StrategyDetailPage() {
   }
   return <>
     <PageHeading eyebrow="STRATEGY DETAIL" title={deployment.name} description={`部署 ID：${deployment.id}`} action={<div className="button-group"><button className="button button-secondary" type="button" onClick={() => setEditing(true)}><Settings2 size={16} />编辑</button><button className="button button-primary" type="button" onClick={() => window.location.reload()}><RefreshCcw size={16} />刷新数据</button></div>} />
-    <section className="detail-hero panel"><div><div className="detail-title"><div className="strategy-row-icon"><BrainCircuit /></div><div><span>GAINLAB OFFICIAL · {deployment.strategy_code}</span><h2>{deployment.name}</h2></div><StatusPill tone={statusTone(deployment.status)}>{statusText(deployment.status)}</StatusPill></div><p className="strategy-detail-summary">{(deployment.summary || '本策略由价格行为分析引擎与 AI 共同完成候选信号识别、开仓判断和持仓风控。').replace(/\\n/g, '\n')}</p></div><div className="detail-key"><span>MT4 / MT5 部署 Key</span><div><code>{deployment.deployment_key}</code><button type="button" onClick={copyDeploymentKey}><Copy size={15} />复制 Key</button></div><small><ShieldCheck size={14} />请勿公开分享，该 Key 可以调用您的策略。</small><Link className="detail-key-guide" to="/guide">如何设置？<ArrowRight size={14} /></Link></div></section>
+    <section className="detail-hero panel"><div><div className="detail-title"><div className="strategy-row-icon"><BrainCircuit /></div><div><span>{deployment.strategy_code === 'CUSTOM_AI_V1' ? 'CUSTOM STRATEGY' : `GAINLAB OFFICIAL · ${deployment.strategy_code}`}</span><h2>{deployment.name}</h2></div><StatusPill tone={statusTone(deployment.status)}>{statusText(deployment.status)}</StatusPill></div><p className="strategy-detail-summary">{(deployment.summary || (deployment.strategy_code === 'CUSTOM_AI_V1' ? '由自然语言规则生成的自定义 AI 策略。' : '本策略由价格行为分析引擎与 AI 共同完成候选信号识别、开仓判断和持仓风控。')).replace(/\\n/g, '\n')}</p></div><div className="detail-key"><span>MT4 / MT5 部署 Key</span><div><code>{deployment.deployment_key}</code><button type="button" onClick={copyDeploymentKey}><Copy size={15} />复制 Key</button></div><small><ShieldCheck size={14} />请勿公开分享，该 Key 可以调用您的策略。</small><Link className="detail-key-guide" to="/guide">如何设置？<ArrowRight size={14} /></Link></div></section>
     <section className="stats-grid compact-stats"><StatCard label="分析次数" value={numberText(deployment.analysis_count)} note={`累计调用 ${numberText(deployment.analysis_count)} 次`} icon={<Activity />} /><StatCard label="有效信号" value={numberText(deployment.signal_count)} note={`信号率 ${signalRate.toFixed(2)}%`} icon={<Zap />} tone="blue" /><StatCard label="历史订单" value={numberText(deployment.order_count)} note={`${strategyOrders.length} 条已同步记录`} icon={<ReceiptText />} /><StatCard label="累计盈亏" value={signedMoney(deployment.pnl)} note="净盈亏" icon={<LineChart />} tone="amber" /></section>
     <section className="detail-grid"><article className="panel"><div className="panel-heading"><div><span className="eyebrow">RUNTIME CONFIG</span><h2>运行配置</h2></div></div><div className="info-list"><Info label="绑定 MT 账号" value={deployment.mt_login || '首次连接时自动绑定'} icon={<Fingerprint />} /><Info label="开单算法" value={positionText} icon={<ShieldCheck />} /><Info label="最大持仓" value={`${deployment.max_positions}${deployment.allow_add ? '（允许加仓）' : ''}`} icon={<BarChart3 />} /></div></article><article className="panel"><div className="panel-heading"><div><span className="eyebrow">AI MODELS</span><h2>模型配置</h2></div></div><div className="model-summary"><div><BrainCircuit /><span><small>开单分析</small><strong>{deployment.open_ai_endpoint_name || deployment.open_ai_model || '未指定模型'}</strong><em>{aiModeText(deployment.open_ai_mode)}</em></span></div><div><BrainCircuit /><span><small>持仓风控</small><strong>{deployment.position_ai_endpoint_name || deployment.position_ai_model || '未指定模型'}</strong><em>{aiModeText(deployment.position_ai_mode)}</em></span></div></div><div className="usage-progress"><div><span>累计 AI Token</span><strong>{tokenText(deployment.official_tokens_used + deployment.custom_tokens_used)}</strong></div><i><b style={{ width: deployment.analysis_count ? '100%' : '0%' }} /></i></div></article></section>
+    {deployment.strategy_code === 'CUSTOM_AI_V1' && <section className="panel custom-strategy-detail"><div className="panel-heading"><div><span className="eyebrow">CUSTOM RULES</span><h2>自定义策略逻辑</h2></div></div><div><article><span>开仓逻辑</span><p>{deployment.open_logic || '-'}</p><small>指标：{deployment.open_indicators?.length ? deployment.open_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线数据'}</small></article><article><span>持仓风控逻辑</span><p>{deployment.position_logic || '-'}</p><small>指标：{deployment.position_indicators?.length ? deployment.position_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线与持仓数据'}</small></article></div></section>}
     <section className="panel"><div className="panel-heading"><div><span className="eyebrow">LATEST ORDERS</span><h2>最近订单</h2></div><Link to="/app/orders"><TextLink>查看全部</TextLink></Link></div><RecentOrders orders={strategyOrders.slice(0, 5)} /></section>
   </>
 }
@@ -634,11 +877,32 @@ export function WalletPage() {
 export function UsagePage() {
   const [page, setPage] = useState(1)
   const [selectedUsage, setSelectedUsage] = useState<PortalUsage | null>(null)
+  const [screenshotPreview, setScreenshotPreview] = useState<UsageScreenshotPreview | null>(null)
+  const [screenshotLoading, setScreenshotLoading] = useState(false)
+  const [screenshotError, setScreenshotError] = useState('')
   const [filters, setFilters] = useState<UsageFilters>({ modelId: '', deploymentId: '', startAt: '', endAt: '' })
   const pageSize = 10
   const { data: usageData, loading: usageLoading, error: usageError } = useUserUsage(page, pageSize, filters)
   const changeFilter = (field: keyof UsageFilters, value: string) => { setPage(1); setFilters((current) => ({ ...current, [field]: value })) }
   const resetFilters = () => { setPage(1); setFilters({ modelId: '', deploymentId: '', startAt: '', endAt: '' }) }
+  const openUsageDetail = (item: PortalUsage) => { setSelectedUsage(item); setScreenshotPreview(null); setScreenshotError('') }
+  const closeUsageDetail = () => { setSelectedUsage(null); setScreenshotPreview(null); setScreenshotError(''); setScreenshotLoading(false) }
+  const loadUsageScreenshot = async () => {
+    if (!selectedUsage?.screenshot_preview_id || screenshotLoading) return
+    setScreenshotLoading(true)
+    setScreenshotError('')
+    try {
+      const result = await apiRequest<UsageScreenshotPreview>('/api/v1/auth/usage/screenshot-preview', {
+        method: 'POST',
+        body: JSON.stringify({ usage_id: selectedUsage.id }),
+      })
+      setScreenshotPreview(result)
+    } catch {
+      setScreenshotError('请求截图已过期或不存在')
+    } finally {
+      setScreenshotLoading(false)
+    }
+  }
   const rows = usageData?.list || []
   const totalPages = usageData?.pages || 1
   const summary = usageData?.summary || { calls: 0, success_calls: 0, input_tokens: 0, output_tokens: 0, official_tokens: 0, custom_tokens: 0, charged_amount: '0' }
@@ -659,10 +923,10 @@ export function UsagePage() {
       <button className="button button-secondary" type="button" onClick={resetFilters}><RefreshCcw size={15} />重置</button>
     </section>
     <section className="stats-grid compact-stats"><StatCard label="筛选调用次数" value={numberText(summary.calls)} note={`成功 ${numberText(summary.success_calls)} 次`} icon={<BrainCircuit />} /><StatCard label="筛选输入 Token" value={tokenText(summary.input_tokens)} note="当前筛选范围" icon={<ArrowUpRight />} tone="blue" /><StatCard label="筛选输出 Token" value={tokenText(summary.output_tokens)} note="当前筛选范围" icon={<ArrowDownRight />} /><StatCard label="筛选费用" value={`¥${money(summary.charged_amount)}`} note="当前筛选范围" icon={<Coins />} tone="amber" /></section>
-    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">CALL HISTORY</span><h2>调用明细</h2></div><span className="usage-retention-badge">调用明细保留 {retentionDays} 天</span></div>
-      {usageLoading ? <div className="permission-loading">正在加载调用明细...</div> : usageError ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>调用明细加载失败</strong><span>{usageError}</span></div></div> : rows.length ? <><div className="table-wrap"><table><thead><tr><th>时间</th><th>模型</th><th>策略</th><th>策略 Key</th><th>场景</th><th>输入</th><th>输出</th><th>费用</th><th>状态</th><th>详情</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td className="muted-cell">{isoTime(item.created_at)}</td><td><strong>{item.model_name || item.provider_name || item.model_id || '-'}</strong></td><td>{item.strategy_name || item.strategy_code || '-'}</td><td><code className="usage-key" title={item.deployment_key || ''}>{item.deployment_key || '-'}</code></td><td>{sceneText(item.endpoint)}</td><td>{tokenText(item.input_tokens)}</td><td>{tokenText(item.output_tokens)}</td><td>{item.billing_source === 'custom' ? '自定义 AI' : `¥${feeMoney(item.charged_amount)}`}</td><td><span className={item.success ? 'result-success' : 'result-neutral'}>{item.success ? '成功' : '失败'}</span></td><td><button className="usage-detail-button" type="button" onClick={() => setSelectedUsage(item)}>查看</button></td></tr>)}</tbody></table></div><div className="usage-pagination"><span>共 {numberText(usageData?.total || 0)} 条</span><div><button type="button" disabled={page <= 1 || usageLoading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><em>{page} / {totalPages}</em><button type="button" disabled={page >= totalPages || usageLoading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</button></div></div></> : <EmptyState icon={<BrainCircuit />} title="暂无匹配记录" description="请调整模型、策略 Key 或时间范围。" />}
+    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">CALL HISTORY</span><h2>调用明细</h2></div><div className="usage-retention-notes"><span className="usage-retention-badge">调用明细保留 {retentionDays} 天</span><small>请求截图保留 6 小时</small></div></div>
+      {usageLoading ? <div className="permission-loading">正在加载调用明细...</div> : usageError ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>调用明细加载失败</strong><span>{usageError}</span></div></div> : rows.length ? <><div className="table-wrap"><table><thead><tr><th>时间</th><th>模型</th><th>策略</th><th>策略 Key</th><th>场景</th><th>输入</th><th>输出</th><th>费用</th><th>状态</th><th>详情</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td className="muted-cell">{isoTime(item.created_at)}</td><td><strong>{item.model_name || item.provider_name || item.model_id || '-'}</strong></td><td>{item.strategy_name || item.strategy_code || '-'}</td><td><code className="usage-key" title={item.deployment_key || ''}>{item.deployment_key || '-'}</code></td><td>{sceneText(item.endpoint)}</td><td>{tokenText(item.input_tokens)}</td><td>{tokenText(item.output_tokens)}</td><td>{item.billing_source === 'custom' ? '自定义 AI' : `¥${feeMoney(item.charged_amount)}`}</td><td><span className={item.success ? 'result-success' : 'result-neutral'}>{item.success ? '成功' : '失败'}</span></td><td><button className="usage-detail-button" type="button" onClick={() => openUsageDetail(item)}>查看</button></td></tr>)}</tbody></table></div><div className="usage-pagination"><span>共 {numberText(usageData?.total || 0)} 条</span><div><button type="button" disabled={page <= 1 || usageLoading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><em>{page} / {totalPages}</em><button type="button" disabled={page >= totalPages || usageLoading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</button></div></div></> : <EmptyState icon={<BrainCircuit />} title="暂无匹配记录" description="请调整模型、策略 Key 或时间范围。" />}
     </section>
-    {selectedUsage && <div className="security-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedUsage(null) }}><section className="security-modal usage-detail-modal" role="dialog" aria-modal="true"><button className="security-modal-close" type="button" onClick={() => setSelectedUsage(null)} aria-label="关闭"><X size={18} /></button><div className="security-modal-title"><BrainCircuit /><div><h2>AI 调用详情</h2><p>{isoTime(selectedUsage.created_at)} · {selectedUsage.model_name || selectedUsage.provider_name || selectedUsage.model_id || '-'}</p></div></div><div className="usage-detail-summary"><div><span>策略 Key</span><strong className="mono">{selectedUsage.deployment_key || '-'}</strong></div><div><span>场景</span><strong>{sceneText(selectedUsage.endpoint)}</strong></div><div><span>输入 / 输出</span><strong>{tokenText(selectedUsage.input_tokens)} / {tokenText(selectedUsage.output_tokens)}</strong></div><div><span>计费单价</span><strong>¥{feeMoney(selectedUsage.input_price_snapshot)} / ¥{feeMoney(selectedUsage.output_price_snapshot)}</strong></div><div><span>本次费用</span><strong>¥{feeMoney(selectedUsage.charged_amount)}</strong></div><div><span>扣费后余额</span><strong>{selectedUsage.balance_after == null ? '-' : `¥${feeMoney(selectedUsage.balance_after)}`}</strong></div><div><span>执行状态</span><strong className={selectedUsage.success ? 'profit' : 'loss'}>{selectedUsage.success ? '成功' : '失败'}</strong></div></div><div className="usage-detail-content"><section><h3>AI 返回内容</h3><pre>{selectedUsage.response_preview || '暂无返回内容'}</pre></section>{selectedUsage.error_message && <section className="usage-error-content"><h3>错误信息</h3><pre>{selectedUsage.error_message}</pre></section>}</div></section></div>}
+    {selectedUsage && <div className="security-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeUsageDetail() }}><section className="security-modal usage-detail-modal" role="dialog" aria-modal="true"><button className="security-modal-close" type="button" onClick={closeUsageDetail} aria-label="关闭"><X size={18} /></button><div className="security-modal-title"><BrainCircuit /><div><h2>AI 调用详情</h2><p>{isoTime(selectedUsage.created_at)} · {selectedUsage.model_name || selectedUsage.provider_name || selectedUsage.model_id || '-'}</p></div></div><div className="usage-detail-summary"><div><span>策略 Key</span><strong className="mono">{selectedUsage.deployment_key || '-'}</strong></div><div><span>场景</span><strong>{sceneText(selectedUsage.endpoint)}</strong></div><div><span>输入 / 输出</span><strong>{tokenText(selectedUsage.input_tokens)} / {tokenText(selectedUsage.output_tokens)}</strong></div><div><span>计费单价</span><strong>¥{feeMoney(selectedUsage.input_price_snapshot)} / ¥{feeMoney(selectedUsage.output_price_snapshot)}</strong></div><div><span>本次费用</span><strong>¥{feeMoney(selectedUsage.charged_amount)}</strong></div><div><span>扣费后余额</span><strong>{selectedUsage.balance_after == null ? '-' : `¥${feeMoney(selectedUsage.balance_after)}`}</strong></div><div><span>执行状态</span><strong className={selectedUsage.success ? 'profit' : 'loss'}>{selectedUsage.success ? '成功' : '失败'}</strong></div></div><div className="usage-detail-content"><section><h3>AI 返回内容</h3><pre>{selectedUsage.response_preview || '暂无返回内容'}</pre></section>{selectedUsage.error_message && <section className="usage-error-content"><h3>错误信息</h3><pre>{publicAiErrorText(selectedUsage.error_message)}</pre></section>}{selectedUsage.screenshot_preview_id && <section className="usage-screenshot-content"><div className="usage-screenshot-heading"><h3>EA 请求截图</h3>{!screenshotPreview && <button className="usage-detail-button" type="button" disabled={screenshotLoading} onClick={() => void loadUsageScreenshot()}>{screenshotLoading ? '正在读取...' : '查看请求截图'}</button>}</div>{screenshotError && <p>{screenshotError}</p>}{screenshotPreview && <><img src={screenshotPreview.data_url} alt="EA请求截图" /><small>{screenshotPreview.mime_type} · {numberText(screenshotPreview.size_bytes)} 字节 · 截图保留6小时</small></>}</section>}</div></section></div>}
   </>
 }
 
