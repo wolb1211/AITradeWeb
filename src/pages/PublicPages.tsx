@@ -182,8 +182,8 @@ export function CustomStrategyIntroPage() {
             <h1>不会编程，也能把交易想法<br />变成可运行的 <em>AI 策略</em></h1>
             <p>用日常语言写下开仓、平仓和持仓风控规则。GainLab 帮您解析逻辑、准备指标与提示词，并生成可以连接 MT4 / MT5 的策略 Key。</p>
             <div className="hero-actions">
-              <Link className="button button-primary button-large" to={loggedIn ? '/app/strategies/new' : '/register'}>
-                {loggedIn ? '开始创建策略' : '注册并开始创建'}<ArrowRight size={18} />
+              <Link className="button button-primary button-large" to={loggedIn ? '/app/strategies/new/custom' : '/register'}>
+                {loggedIn ? '自定义AI策略' : '注册并开始创建'}<ArrowRight size={18} />
               </Link>
               <a className="button button-outline button-large" href="#custom-workflow">查看创建流程</a>
             </div>
@@ -249,7 +249,7 @@ export function CustomStrategyIntroPage() {
         </div>
       </section>
 
-      <section className="cta-section"><div className="public-container cta-inner"><div><span>TURN IDEAS INTO STRATEGIES</span><h2>把您的下一条交易规则写下来</h2><p>不必从学习编程开始，先从说清楚自己的交易逻辑开始。</p></div><Link className="button button-light button-large" to={loggedIn ? '/app/strategies/new' : '/register'}>{loggedIn ? '创建自定义策略' : '免费注册'}<ArrowRight size={18} /></Link></div></section>
+      <section className="cta-section"><div className="public-container cta-inner"><div><span>TURN IDEAS INTO STRATEGIES</span><h2>把您的下一条交易规则写下来</h2><p>不必从学习编程开始，先从说清楚自己的交易逻辑开始。</p></div><Link className="button button-light button-large" to={loggedIn ? '/app/strategies/new/custom' : '/register'}>{loggedIn ? '自定义AI策略' : '免费注册'}<ArrowRight size={18} /></Link></div></section>
     </div>
   )
 }

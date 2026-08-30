@@ -7,7 +7,7 @@ import { SHOW_OFFICIAL_STRATEGIES } from './config/features'
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from './pages/AuthPages'
 import {
   AgentCenterPage, DashboardPage, EaDownloadsPage, OrdersPage, ProfilePage, SecurityPage, StrategiesPage,
-  StrategyCreatePage, StrategyDetailPage, UsagePage, WalletPage, WorkflowPrototypePage,
+  CustomAiStrategyCreatePage, StrategyDetailPage, StrategyLibraryCreatePage, UsagePage, WalletPage, WorkflowPrototypePage,
 } from './pages/AppPages'
 import { CustomStrategyIntroPage, GuideDetailPage, GuidePage, HomePage, LegalPage, OfficialStrategiesPage, PricingPage } from './pages/PublicPages'
 
@@ -31,7 +31,9 @@ export default function App() {
       <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<DashboardPage />} />
         <Route path="strategies" element={<StrategiesPage />} />
-        <Route path="strategies/new" element={<RequireVip><StrategyCreatePage /></RequireVip>} />
+        <Route path="strategies/new" element={<Navigate to="/app/strategies/new/library" replace />} />
+        <Route path="strategies/new/library" element={<RequireVip><StrategyLibraryCreatePage /></RequireVip>} />
+        <Route path="strategies/new/custom" element={<RequireVip><CustomAiStrategyCreatePage /></RequireVip>} />
         <Route path="strategies/workflow-prototype" element={<RequireVip><WorkflowPrototypePage /></RequireVip>} />
         <Route path="strategies/:id" element={<StrategyDetailPage />} />
         <Route path="orders" element={<OrdersPage />} />
