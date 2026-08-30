@@ -291,8 +291,17 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     }
     const outgoing = stage.edges.filter((edge) => edge.source === selected.id)
     const fallback = outgoing.find((edge) => edge.source_handle === 'no')?.target || outgoing[0]?.target
-    if (!fallback) return
     const incoming = stage.edges.filter((edge) => edge.target === selected.id)
+    if (!fallback) {
+      const nextStage = pruneWorkflowStage({
+        ...stage,
+        nodes: stage.nodes.filter((node) => node.id !== selected.id),
+        edges: stage.edges.filter((edge) => edge.source !== selected.id && edge.target !== selected.id),
+      })
+      onChange({ ...value, [stageName]: nextStage })
+      setSelectedId(incoming[0]?.source || stage.entry_node_id)
+      return
+    }
     const removedIds = new Set(outgoing.map((edge) => edge.id))
     const edges = stage.edges
       .filter((edge) => !removedIds.has(edge.id))

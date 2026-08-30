@@ -12,6 +12,7 @@ import { describeWorkflowNode } from './labels'
 
 const conditionOptions: Array<{ value: WorkflowCondition['kind']; label: string }> = [
   { value: 'comparison', label: '数值比较' },
+  { value: 'vision_result', label: '截图识别结果' },
   { value: 'cross', label: '上穿 / 下破' },
   { value: 'consecutive', label: '连续满足' },
   { value: 'indicator_trend', label: '指标连续上升 / 下降' },
@@ -20,7 +21,6 @@ const conditionOptions: Array<{ value: WorkflowCondition['kind']; label: string 
   { value: 'breakout', label: '突破 / 回踩' },
   { value: 'atr_distance', label: 'ATR距离' },
   { value: 'position_state', label: '持仓状态' },
-  { value: 'vision_result', label: '截图识别结果' },
   { value: 'group', label: 'AND / OR 条件组' },
 ]
 
