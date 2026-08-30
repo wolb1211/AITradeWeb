@@ -19,7 +19,7 @@ const patternNames: Record<string, string> = {
 }
 
 export function describeWorkflowNode(node: WorkflowNode): string {
-  if (node.type === 'entry') return node.stage === 'position' ? '持仓风控' : '开仓分析'
+  if (node.type === 'entry') return node.stage === 'position' ? 'EA提供风控数据' : 'EA提供开仓数据'
   if (node.type === 'condition') return node.condition ? describeCondition(node.condition) : '请选择条件'
   if (node.type === 'vision_condition') return meaningfulInstruction(node.instruction) ? `截图：${shortText(node.instruction!)}` : '请选择截图识别规则'
   if (node.type === 'ai_condition') return meaningfulInstruction(node.instruction) ? `AI：${shortText(node.instruction!)}` : '请选择AI判断规则'
@@ -100,4 +100,3 @@ function formatNumber(value: unknown) {
   const number = Number(value)
   return Number.isFinite(number) ? String(Number(number.toFixed(6))) : String(value ?? '未设置')
 }
-

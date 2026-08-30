@@ -34,6 +34,7 @@
 .workflow-node-head { margin-bottom: 9px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
 .workflow-node strong { display: block; font-size: 13px; line-height: 1.45; }
 .workflow-node > small { display: block; margin-top: 6px; color: #8b7eff; font-size: 11px; }
+.workflow-node > .workflow-entry-summary { color: var(--muted); font-size: 12px; }
 .workflow-node-entry { border-color: rgb(75 191 137 / 48%); }
 .workflow-node-condition { border-color: rgb(74 144 226 / 48%); }
 .workflow-node-vision_condition, .workflow-node-ai_condition { border-color: rgb(143 99 255 / 55%); }

@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Bot, Check, GitBranch, Image, Play, Plus, ShieldCheck, Sparkles, X } from 'lucide-react'
-import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStage, WorkflowStageName } from './types'
+import type { CustomStrategyWorkflow, WorkflowDataRequirements, WorkflowNode, WorkflowStage, WorkflowStageName } from './types'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { validateWorkflowDraft, type WorkflowValidationIssue } from './validation'
 import { pruneWorkflowStage } from './graph'
@@ -25,9 +25,16 @@ import './workflow-editor.css'
 
 type EditorNodeData = {
   workflowNode: WorkflowNode
+  dataRequirements: WorkflowDataRequirements
   selected: boolean
   onSelect: (id: string) => void
   onAdd: (id: string, branch: 'next' | 'yes' | 'no') => void
+}
+
+function describeEntryData(requirements: WorkflowDataRequirements) {
+  if (requirements.data_type === 'screenshot') return '截图'
+  const kline = `K线 × ${requirements.kline_count}`
+  return requirements.data_type === 'both' ? `截图 + ${kline}` : kline
 }
 
 const elk = new ELK()
@@ -50,8 +57,9 @@ function StrategyNode({ data }: NodeProps<FlowNode<EditorNodeData>>) {
   const condition = node.type === 'condition' || node.type === 'vision_condition' || node.type === 'ai_condition'
   return <div className={`${nodeClass(node.type)}${data.selected ? ' selected' : ''}`} onClick={() => data.onSelect(node.id)}>
     {node.type !== 'entry' && <Handle type="target" position={Position.Top} isConnectable={false} />}
-    <div className="workflow-node-head">{nodeIcon(node.type)}<span>{node.type === 'entry' ? '流程入口' : condition ? '判断条件' : '执行动作'}</span></div>
+    <div className="workflow-node-head">{nodeIcon(node.type)}<span>{node.type === 'entry' ? '数据入口' : condition ? '判断条件' : '执行动作'}</span></div>
     <strong>{displayLabel}</strong>
+    {node.type === 'entry' && <small className="workflow-entry-summary">{describeEntryData(data.dataRequirements)}</small>}
     {node.type === 'vision_condition' && <small>AI截图识别</small>}
     {node.type === 'ai_condition' && <small>开放语义判断</small>}
     {node.type === 'entry' && <>
@@ -77,7 +85,7 @@ async function layoutStage(workflow: CustomStrategyWorkflow, stageName: Workflow
       'elk.spacing.nodeNode': '46',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
     },
-    children: stage.nodes.map((node) => ({ id: node.id, width: 220, height: node.type === 'condition' || node.type.includes('condition') ? 132 : 88 })),
+    children: stage.nodes.map((node) => ({ id: node.id, width: 220, height: node.type === 'condition' || node.type.includes('condition') ? 132 : node.type === 'entry' ? 104 : 88 })),
     edges: stage.edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   })
   const positions = new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
@@ -173,7 +181,7 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
     id: node.id,
     type: 'strategy',
     position: positions.get(node.id) || node.position || { x: 0, y: 0 },
-    data: { workflowNode: node, selected: selectedId === node.id, onSelect, onAdd },
+    data: { workflowNode: node, dataRequirements: value[stageName].data_requirements, selected: selectedId === node.id, onSelect, onAdd },
     draggable: true,
   })), [onAdd, onSelect, positions, selectedId, stageName, value])
   const edges = useMemo<FlowEdge[]>(() => value[stageName].edges.map((edge) => ({
