@@ -119,7 +119,7 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
     markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
     style: { strokeWidth: 1.6 },
   })), [stageName, value])
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView>
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView proOptions={{ hideAttribution: true }}>
     <Background gap={22} size={1} />
     <Controls showInteractive={false} />
   </ReactFlow>
