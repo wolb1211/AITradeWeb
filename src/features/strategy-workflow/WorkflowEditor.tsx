@@ -117,8 +117,18 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
     target: edge.target,
     sourceHandle: edge.source_handle,
     type: 'smoothstep',
+    pathOptions: {
+      borderRadius: 10,
+      offset: 18,
+      // Put yes/no branches on separate routing lanes so their horizontal
+      // sections never overlap when they point at sibling subtrees.
+      stepPosition: edge.source_handle === 'yes' ? 0.32 : edge.source_handle === 'no' ? 0.68 : 0.5,
+    },
     markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-    style: { strokeWidth: 1.6 },
+    style: {
+      strokeWidth: 1.6,
+      stroke: edge.source_handle === 'yes' ? 'rgba(61, 190, 139, .72)' : edge.source_handle === 'no' ? 'rgba(235, 105, 116, .68)' : undefined,
+    },
   })), [stageName, value])
   return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView proOptions={{ hideAttribution: true }}>
     <Background gap={22} size={1} />
