@@ -113,20 +113,36 @@ function enforceBranchSides(stage: WorkflowStage, positions: Map<string, { x: nu
     if (yesId && noId && yesId !== noId) {
       const yesPosition = positions.get(yesId)
       const noPosition = positions.get(noId)
-      if (yesPosition && noPosition && yesPosition.x > noPosition.x) {
-        const shift = yesPosition.x - noPosition.x
-        const yesTree = descendants(yesId)
-        const noTree = descendants(noId)
-        yesTree.forEach((id) => {
-          if (noTree.has(id)) return
-          const position = positions.get(id)
-          if (position) positions.set(id, { ...position, x: position.x - shift })
-        })
-        noTree.forEach((id) => {
-          if (yesTree.has(id)) return
+      const parentPosition = positions.get(nodeId)
+      const yesTree = descendants(yesId)
+      const noTree = descendants(noId)
+      const shiftExclusive = (tree: Set<string>, sharedTree: Set<string>, shift: number) => {
+        if (!shift) return
+        tree.forEach((id) => {
+          if (sharedTree.has(id)) return
           const position = positions.get(id)
           if (position) positions.set(id, { ...position, x: position.x + shift })
         })
+      }
+      if (yesPosition && noPosition && yesPosition.x > noPosition.x) {
+        const shift = yesPosition.x - noPosition.x
+        shiftExclusive(yesTree, noTree, -shift)
+        shiftExclusive(noTree, yesTree, shift)
+      }
+      if (parentPosition) {
+        // Node width is 220px. Yes/no handles sit at 25%/75%; keeping each
+        // child at least 90px away from the parent's left coordinate makes
+        // the green branch visibly leave to the left and the red branch to
+        // the right before turning downward.
+        const branchOffset = 90
+        const adjustedYes = positions.get(yesId)
+        const adjustedNo = positions.get(noId)
+        if (adjustedYes && adjustedYes.x > parentPosition.x - branchOffset) {
+          shiftExclusive(yesTree, noTree, parentPosition.x - branchOffset - adjustedYes.x)
+        }
+        if (adjustedNo && adjustedNo.x < parentPosition.x + branchOffset) {
+          shiftExclusive(noTree, yesTree, parentPosition.x + branchOffset - adjustedNo.x)
+        }
       }
     }
     branches?.forEach((target) => queue.push(target))
