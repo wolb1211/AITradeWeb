@@ -32,9 +32,9 @@ type EditorNodeData = {
 }
 
 function describeEntryData(requirements: WorkflowDataRequirements) {
-  if (requirements.data_type === 'screenshot') return '截图'
+  if (requirements.data_type === 'screenshot') return 'EA图表截图'
   const kline = `K线 × ${requirements.kline_count}`
-  return requirements.data_type === 'both' ? `截图 + ${kline}` : kline
+  return requirements.data_type === 'both' ? `EA图表截图 + ${kline}` : kline
 }
 
 const elk = new ELK()
