@@ -144,7 +144,7 @@ function ActionFields({ node, stage, onChange }: { node: WorkflowNode; stage: Wo
 
 export function NodeConfigPanel({ node, stage, requirements, onChange, onRequirementsChange, onDelete }: { node?: WorkflowNode; stage: WorkflowStageName; requirements: WorkflowDataRequirements; onChange: (node: WorkflowNode) => void; onRequirementsChange: (value: WorkflowDataRequirements) => void; onDelete: () => void }) {
   if (!node) return <aside className="workflow-config-panel"><p>请选择一个节点进行设置。</p></aside>
-  const canDelete = node.type !== 'entry' && node.type !== 'action'
+  const canDelete = node.type !== 'entry'
   return <aside className="workflow-config-panel">
     <div className="workflow-config-title"><div><small>节点设置</small><h3>{node.label}</h3></div>{canDelete && <button type="button" title="删除节点" onClick={onDelete}><Trash2 size={16} /></button>}</div>
     <label><span>显示名称</span><input value={node.label} onChange={(event) => onChange({ ...node, label: event.target.value })} /></label>

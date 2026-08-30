@@ -1,4 +1,5 @@
 import type { CustomStrategyWorkflow } from './types'
+import { pruneWorkflowStage } from './graph'
 
 type WorkflowDraft = {
   schema_version: 1
@@ -17,7 +18,14 @@ export function loadWorkflowDraft(key: string): WorkflowDraft | null {
     const value = JSON.parse(localStorage.getItem(key) || 'null') as WorkflowDraft | null
     if (!value || value.schema_version !== 1 || value.workflow?.schema_version !== 1) return null
     if (!value.workflow.open || !value.workflow.position) return null
-    return value
+    return {
+      ...value,
+      workflow: {
+        ...value.workflow,
+        open: pruneWorkflowStage(value.workflow.open),
+        position: pruneWorkflowStage(value.workflow.position),
+      },
+    }
   } catch {
     return null
   }
@@ -32,4 +40,3 @@ export function saveWorkflowDraft(key: string, workflow: CustomStrategyWorkflow)
 export function clearWorkflowDraft(key: string) {
   localStorage.removeItem(key)
 }
-

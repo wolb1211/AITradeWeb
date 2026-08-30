@@ -18,6 +18,7 @@ import { Bot, Check, GitBranch, Image, Play, Plus, ShieldCheck, Sparkles, X } fr
 import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStageName } from './types'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { validateWorkflowDraft, type WorkflowValidationIssue } from './validation'
+import { pruneWorkflowStage } from './graph'
 import '@xyflow/react/dist/style.css'
 import './workflow-editor.css'
 
@@ -150,8 +151,18 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     onChange({ ...value, [stageName]: { ...value[stageName], data_requirements: requirements } })
   }, [onChange, stageName, value])
   const deleteSelected = useCallback(() => {
-    if (!selected || selected.type === 'entry' || selected.type === 'action') return
+    if (!selected || selected.type === 'entry') return
     const stage = value[stageName]
+    if (selected.type === 'action') {
+      const nextStage = pruneWorkflowStage({
+        ...stage,
+        nodes: stage.nodes.filter((node) => node.id !== selected.id),
+        edges: stage.edges.filter((edge) => edge.source !== selected.id && edge.target !== selected.id),
+      })
+      onChange({ ...value, [stageName]: nextStage })
+      setSelectedId(stage.entry_node_id)
+      return
+    }
     const outgoing = stage.edges.filter((edge) => edge.source === selected.id)
     const fallback = outgoing.find((edge) => edge.source_handle === 'no')?.target || outgoing[0]?.target
     if (!fallback) return
@@ -160,7 +171,8 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     const edges = stage.edges
       .filter((edge) => !removedIds.has(edge.id))
       .map((edge) => incoming.some((item) => item.id === edge.id) ? { ...edge, target: fallback } : edge)
-    onChange({ ...value, [stageName]: { ...stage, nodes: stage.nodes.filter((node) => node.id !== selected.id), edges } })
+    const nextStage = pruneWorkflowStage({ ...stage, nodes: stage.nodes.filter((node) => node.id !== selected.id), edges })
+    onChange({ ...value, [stageName]: nextStage })
     setSelectedId(stage.entry_node_id)
   }, [onChange, selected, stageName, value])
   const addNext = useCallback((source: string, branch: 'next' | 'yes' | 'no') => setAddTarget({ source, branch }), [])
@@ -168,7 +180,6 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     if (!addTarget) return
     const stage = value[stageName]
     const currentEdge = stage.edges.find((edge) => edge.source === addTarget.source && edge.source_handle === addTarget.branch)
-    if (!currentEdge) return
     const id = `${stageName}_${type}_${Date.now()}`
     let node: WorkflowNode
     if (type === 'condition') node = {
@@ -189,20 +200,21 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
       id, type, label: stageName === 'open' ? '不操作' : '保持持仓',
       action: { kind: stageName === 'open' ? 'no_action' : 'hold' },
     }
-    const replacedEdge = { ...currentEdge, target: id }
     let nodes = [...stage.nodes, node]
-    let edges = stage.edges.map((edge) => edge.id === currentEdge.id ? replacedEdge : edge)
+    let edges = currentEdge
+      ? stage.edges.map((edge) => edge.id === currentEdge.id ? { ...currentEdge, target: id } : edge)
+      : [...stage.edges, { id: `${id}_incoming`, source: addTarget.source, target: id, source_handle: addTarget.branch }]
     if (type === 'action') {
-      const previousTarget = currentEdge.target
-      const remainsReferenced = edges.some((edge) => edge.target === previousTarget)
-      if (!remainsReferenced) nodes = nodes.filter((item) => item.id !== previousTarget)
-    } else {
+      // The action ends this branch. Any old subtree that is no longer used
+      // by another branch is removed by pruneWorkflowStage below.
+    } else if (currentEdge) {
       edges = [...edges,
         { id: `${id}_yes`, source: id, target: currentEdge.target, source_handle: 'yes' },
         { id: `${id}_no`, source: id, target: currentEdge.target, source_handle: 'no' },
       ]
     }
-    onChange({ ...value, [stageName]: { ...stage, nodes, edges } })
+    const nextStage = pruneWorkflowStage({ ...stage, nodes, edges })
+    onChange({ ...value, [stageName]: nextStage })
     setSelectedId(id)
     setAddTarget(null)
   }, [addTarget, onChange, stageName, value])
