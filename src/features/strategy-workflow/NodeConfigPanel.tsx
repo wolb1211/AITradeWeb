@@ -8,6 +8,7 @@ import type {
   IndicatorCatalogOutput,
   WorkflowNode,
   WorkflowOperand,
+  WorkflowPriceTarget,
   WorkflowStageName,
 } from './types'
 import { describeWorkflowNode } from './labels'
@@ -284,6 +285,43 @@ function VisionExtractFields({ node, nodes, onChange }: { node: WorkflowNode; no
   </>
 }
 
+const priceTargetOptions: Array<[string, string]> = [
+  ['none', '不设置（0）'],
+  ['fixed', '固定价格'],
+  ['entry_price', '按开仓价计算'],
+  ['current_price', '按当前价格计算'],
+  ['recent_low', '近期最低价'],
+  ['recent_high', '近期最高价'],
+  ['atr_offset', '按 ATR 距离计算'],
+]
+
+function OptionalPriceTargetFields({
+  title,
+  target,
+  onChange,
+}: {
+  title: string
+  target?: WorkflowPriceTarget
+  onChange: (target?: WorkflowPriceTarget) => void
+}) {
+  const setKind = (kind: string) => {
+    if (kind === 'none') return onChange(undefined)
+    if (kind === 'fixed') return onChange({ kind, value: 0 })
+    if (kind === 'recent_low' || kind === 'recent_high') return onChange({ kind, lookback: 5 })
+    if (kind === 'atr_offset') return onChange({ kind, operation: 'subtract', atr_multiplier: 1 })
+    onChange({ kind: kind as 'entry_price' | 'current_price', operation: 'none', offset_value: 0 })
+  }
+  const patch = (updates: Partial<WorkflowPriceTarget>) => target && onChange({ ...target, ...updates })
+  return <fieldset className="workflow-fieldset"><legend>{title}</legend>
+    <label><span>设置方法</span><FormSelect value={target?.kind || 'none'} onChange={setKind} data={priceTargetOptions} /></label>
+    {target?.kind === 'fixed' && <label><span>固定价格</span><input type="number" step="0.00001" value={target.value ?? ''} placeholder="留空或 0 表示不设置" onChange={(event) => patch({ value: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>}
+    {(target?.kind === 'entry_price' || target?.kind === 'current_price') && <div className="workflow-field-row"><label><span>计算方式</span><FormSelect value={target.operation || 'none'} onChange={(operation) => patch({ operation: operation as WorkflowPriceTarget['operation'] })} data={[["none", "直接使用"], ["add", "加上距离"], ["subtract", "减去距离"]]} /></label>{target.operation !== 'none' && <label><span>价格距离</span><input type="number" min="0" step="0.00001" value={target.offset_value ?? ''} placeholder="0" onChange={(event) => patch({ offset_value: event.target.value === '' ? 0 : Number(event.target.value) })} /></label>}</div>}
+    {(target?.kind === 'recent_low' || target?.kind === 'recent_high') && <label><span>最近K线数</span><input type="number" min="1" max="1000" value={target.lookback || 5} onChange={(event) => patch({ lookback: Math.max(1, Number(event.target.value) || 1) })} /></label>}
+    {target?.kind === 'atr_offset' && <div className="workflow-field-row"><label><span>方向</span><FormSelect value={target.operation || 'subtract'} onChange={(operation) => patch({ operation: operation as 'add' | 'subtract' })} data={[["subtract", "当前价减 ATR"], ["add", "当前价加 ATR"]]} /></label><label><span>ATR倍数</span><input type="number" min="0" step="0.1" value={target.atr_multiplier ?? ''} placeholder="0" onChange={(event) => patch({ atr_multiplier: event.target.value === '' ? 0 : Number(event.target.value) })} /></label></div>}
+    {!target && <p className="workflow-inline-note">不设置时由 EA 按 0 处理，不设置止损或止盈。</p>}
+  </fieldset>
+}
+
 function ActionFields({ node, stage, onChange }: { node: WorkflowNode; stage: WorkflowStageName; onChange: (node: WorkflowNode) => void }) {
   const action = node.action || { kind: stage === 'open' ? 'no_action' : 'hold' }
   const setKind = (kind: WorkflowActionKind) => {
@@ -294,12 +332,20 @@ function ActionFields({ node, stage, onChange }: { node: WorkflowNode; stage: Wo
     onChange({ ...node, label: actionOptions[stage].find((item) => item.value === kind)?.label || node.label, action: next })
   }
   const patchAction = (updates: Partial<NonNullable<WorkflowNode['action']>>) => onChange({ ...node, action: { ...action, ...updates } })
+  const patchOptionalTarget = (field: 'stop_loss' | 'take_profit', target?: WorkflowPriceTarget) => {
+    const next = { ...action }
+    if (target) next[field] = target
+    else delete next[field]
+    onChange({ ...node, action: next })
+  }
   const needsVolume = ['close_partial', 'add_buy', 'add_sell'].includes(action.kind)
   const needsTarget = ['modify_sl', 'modify_tp'].includes(action.kind)
+  const opensPosition = action.kind === 'open_buy' || action.kind === 'open_sell'
   return <>
     <label><span>执行动作</span><FormSelect value={action.kind} onChange={(kind) => setKind(kind as WorkflowActionKind)} data={actionOptions[stage].map((item) => [item.value, item.label])} /></label>
     {needsVolume && <div className="workflow-field-row"><label><span>仓位方式</span><FormSelect value={action.volume?.mode || 'current_ratio'} onChange={(mode) => patchAction({ volume: { mode: mode as 'open_sizing' | 'fixed' | 'current_ratio' | 'previous_multiple', value: action.volume?.value || 1 } })} data={[["open_sizing", "使用开仓算法"], ["fixed", "固定手数"], ["current_ratio", "当前仓位比例"], ["previous_multiple", "前一单倍数"]]} /></label><label><span>数值</span><input type="number" min="0.01" step="0.01" value={action.volume?.value || 1} onChange={(event) => patchAction({ volume: { mode: action.volume?.mode || 'current_ratio', value: Number(event.target.value) } })} /></label></div>}
     {needsTarget && <><label><span>目标价格</span><FormSelect value={action.target?.kind || 'entry_price'} onChange={(kind) => patchAction({ target: { ...action.target, kind: kind as NonNullable<NonNullable<WorkflowNode['action']>['target']>['kind'] } })} data={[["entry_price", "开仓价"], ["current_price", "当前价格"], ["recent_low", "近期最低价"], ["recent_high", "近期最高价"], ["atr_offset", "距离当前价ATR倍数"], ["fixed", "固定价格"]]} /></label>{['recent_low', 'recent_high'].includes(action.target?.kind || '') && <label><span>最近K线数</span><input type="number" min="1" max="1000" value={action.target?.lookback || 5} onChange={(event) => patchAction({ target: { ...action.target!, lookback: Number(event.target.value) } })} /></label>}{action.target?.kind === 'atr_offset' && <label><span>ATR倍数</span><input type="number" min="0.01" step="0.1" value={action.target.atr_multiplier || 0.5} onChange={(event) => patchAction({ target: { ...action.target!, atr_multiplier: Number(event.target.value) } })} /></label>}</>}
+    {opensPosition && <><OptionalPriceTargetFields title="止损设置" target={action.stop_loss} onChange={(target) => patchOptionalTarget('stop_loss', target)} /><OptionalPriceTargetFields title="止盈设置" target={action.take_profit} onChange={(target) => patchOptionalTarget('take_profit', target)} /></>}
     <label><span>动作说明</span><textarea rows={3} value={action.description || ''} onChange={(event) => patchAction({ description: event.target.value })} placeholder="可选，用于运行记录中说明此动作" /></label>
   </>
 }
