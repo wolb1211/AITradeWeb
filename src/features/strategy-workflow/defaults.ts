@@ -27,7 +27,7 @@ function defaultStage(stage: 'open' | 'position'): WorkflowStage {
           description: '持仓盈利距离达到0.5 ATR',
           left: { kind: 'position', name: 'favorable_move' },
           operator: 'gte',
-          right: { kind: 'indicator', indicator: 'atr', alias: 'atr14', params: { length: 14 } },
+          right: { kind: 'indicator', indicator: 'atr', alias: 'atr14', params: { length: 14 }, multiplier: 0.5 },
           lookback: 1,
         },
       },
@@ -59,4 +59,3 @@ export function createDefaultWorkflow(): CustomStrategyWorkflow {
     position: defaultStage('position'),
   }
 }
-

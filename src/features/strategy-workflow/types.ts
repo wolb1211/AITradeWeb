@@ -16,6 +16,8 @@ export type WorkflowOperand = {
   alias?: string
   source?: string
   params?: Record<string, number | string>
+  multiplier?: number
+  addend?: number
   offset?: number
   lookback?: number
 }
@@ -96,4 +98,3 @@ export type CustomStrategyWorkflow = {
   open: WorkflowStage
   position: WorkflowStage
 }
-
