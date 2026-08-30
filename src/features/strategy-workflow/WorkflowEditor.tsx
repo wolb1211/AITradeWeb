@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Bot, Check, GitBranch, Image, Play, Plus, ShieldCheck, Sparkles, X } from 'lucide-react'
-import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStageName } from './types'
+import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStage, WorkflowStageName } from './types'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { validateWorkflowDraft, type WorkflowValidationIssue } from './validation'
 import { pruneWorkflowStage } from './graph'
@@ -78,7 +78,59 @@ async function layoutStage(workflow: CustomStrategyWorkflow, stageName: Workflow
     children: stage.nodes.map((node) => ({ id: node.id, width: 220, height: node.type === 'condition' || node.type.includes('condition') ? 132 : 88 })),
     edges: stage.edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   })
-  return new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
+  const positions = new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
+  enforceBranchSides(stage, positions)
+  return positions
+}
+
+function enforceBranchSides(stage: WorkflowStage, positions: Map<string, { x: number; y: number }>) {
+  const outgoing = new Map<string, Map<string, string>>()
+  stage.edges.forEach((edge) => {
+    const branches = outgoing.get(edge.source) || new Map<string, string>()
+    branches.set(edge.source_handle, edge.target)
+    outgoing.set(edge.source, branches)
+  })
+  const descendants = (start: string) => {
+    const result = new Set<string>()
+    const queue = [start]
+    while (queue.length) {
+      const id = queue.shift()!
+      if (result.has(id)) continue
+      result.add(id)
+      outgoing.get(id)?.forEach((target) => queue.push(target))
+    }
+    return result
+  }
+  const visited = new Set<string>()
+  const queue = [stage.entry_node_id]
+  while (queue.length) {
+    const nodeId = queue.shift()!
+    if (visited.has(nodeId)) continue
+    visited.add(nodeId)
+    const branches = outgoing.get(nodeId)
+    const yesId = branches?.get('yes')
+    const noId = branches?.get('no')
+    if (yesId && noId && yesId !== noId) {
+      const yesPosition = positions.get(yesId)
+      const noPosition = positions.get(noId)
+      if (yesPosition && noPosition && yesPosition.x > noPosition.x) {
+        const shift = yesPosition.x - noPosition.x
+        const yesTree = descendants(yesId)
+        const noTree = descendants(noId)
+        yesTree.forEach((id) => {
+          if (noTree.has(id)) return
+          const position = positions.get(id)
+          if (position) positions.set(id, { ...position, x: position.x - shift })
+        })
+        noTree.forEach((id) => {
+          if (yesTree.has(id)) return
+          const position = positions.get(id)
+          if (position) positions.set(id, { ...position, x: position.x + shift })
+        })
+      }
+    }
+    branches?.forEach((target) => queue.push(target))
+  }
 }
 
 function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
