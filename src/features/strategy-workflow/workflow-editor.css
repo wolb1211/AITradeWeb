@@ -29,6 +29,12 @@
 .workflow-field-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .workflow-parameter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .workflow-parameter-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.workflow-condition-fields { display: flex; flex-direction: column; gap: 9px; }
+.workflow-condition-fields > label, .workflow-condition-fields .workflow-fieldset > label { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
+.workflow-condition-fields .workflow-field-row > label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 5px; }
+.workflow-condition-fields .workflow-parameter-grid:has(> label:only-child) { grid-template-columns: 1fr; }
+.workflow-condition-fields .workflow-parameter-grid > label:only-child { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
+.workflow-condition-fields label > span { line-height: 1.25; }
 .workflow-fieldset { margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: 9px; }
 .workflow-fieldset legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
 .workflow-action-rule { padding: 10px; border-color: color-mix(in srgb, #6bdbb2 38%, var(--line)); background: color-mix(in srgb, var(--surface) 42%, transparent); }
