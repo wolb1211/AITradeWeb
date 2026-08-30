@@ -20,6 +20,8 @@
 .workflow-config-panel .workflow-mantine-select .mantine-Select-input { min-height: 34px; height: 34px; padding: 6px 30px 6px 9px; color: var(--text); border-color: var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; }
 .workflow-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .workflow-field-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.workflow-parameter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.workflow-parameter-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .workflow-fieldset { margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: 9px; }
 .workflow-fieldset legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
 .workflow-fieldset .workflow-fieldset { padding: 6px; gap: 6px; background: color-mix(in srgb, var(--surface) 55%, transparent); }

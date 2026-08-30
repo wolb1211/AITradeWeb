@@ -15,7 +15,8 @@ import {
 } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Bot, Check, GitBranch, Image, Play, Plus, ShieldCheck, Sparkles, X } from 'lucide-react'
-import type { CustomStrategyWorkflow, WorkflowDataRequirements, WorkflowNode, WorkflowStage, WorkflowStageName } from './types'
+import { apiRequest } from '../../lib/api'
+import type { CustomStrategyWorkflow, IndicatorCatalogItem, WorkflowDataRequirements, WorkflowNode, WorkflowStage, WorkflowStageName } from './types'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { validateWorkflowDraft, type WorkflowValidationIssue } from './validation'
 import { pruneWorkflowStage } from './graph'
@@ -255,9 +256,17 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
   const [selectedId, setSelectedId] = useState(value.open.entry_node_id)
   const [addTarget, setAddTarget] = useState<{ source: string; branch: 'next' | 'yes' | 'no' } | null>(null)
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[] | null>(null)
+  const [indicatorCatalog, setIndicatorCatalog] = useState<IndicatorCatalogItem[]>([])
   const selected = value[stageName].nodes.find((node) => node.id === selectedId)
   const availableVisionNodes = selected ? upstreamVisionNodes(value[stageName], selected.id) : []
   useEffect(() => { setSelectedId(value[stageName].entry_node_id) }, [stageName])
+  useEffect(() => {
+    let active = true
+    apiRequest<{ list: IndicatorCatalogItem[] }>('/api/v1/auth/custom-strategy/indicators')
+      .then((result) => { if (active) setIndicatorCatalog(result.list || []) })
+      .catch(() => { if (active) setIndicatorCatalog([]) })
+    return () => { active = false }
+  }, [])
   const updateSelected = useCallback((nextNode: WorkflowNode) => {
     const stageNodes = value[stageName].nodes.map((node) => node.id === selectedId ? nextNode : node)
     const normalizedNode = { ...nextNode, label: describeWorkflowNode(nextNode, stageNodes) }
@@ -369,7 +378,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     </div>
     <div className="workflow-editor-body">
       <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} /></ReactFlowProvider></div>
-      <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />
+      <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} indicatorCatalog={indicatorCatalog} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />
     </div>
     {addTarget && <div className="workflow-add-menu" role="dialog" aria-label="添加流程节点">
       <div><strong>添加下一步</strong><button type="button" onClick={() => setAddTarget(null)}><X size={16} /></button></div>

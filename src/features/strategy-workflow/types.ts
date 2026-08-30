@@ -1,6 +1,29 @@
 export type WorkflowStageName = 'open' | 'position'
 export type WorkflowBranch = 'next' | 'yes' | 'no'
 
+export type IndicatorCatalogOutput = {
+  component: string
+  title: string
+  value_type: string
+  comparison_group: string
+  operators: string[]
+  right_operand_kinds: string[]
+  compatible_groups: string[]
+  condition_kinds: string[]
+  minimum_points: number
+  default_constant: number | null
+  constant_options: Array<{ value: number; label: string }>
+}
+
+export type IndicatorCatalogItem = {
+  name: string
+  title: string
+  default_params: Record<string, number>
+  parameters: Array<{ name: string; label: string; default: number; description: string }>
+  sources: Array<{ value: string; label: string; formula: string }>
+  outputs: IndicatorCatalogOutput[]
+}
+
 export type WorkflowDataRequirements = {
   data_type: 'kline' | 'screenshot' | 'both'
   kline_count: number

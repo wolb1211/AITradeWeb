@@ -4,6 +4,8 @@ import type {
   WorkflowActionKind,
   WorkflowCondition,
   WorkflowDataRequirements,
+  IndicatorCatalogItem,
+  IndicatorCatalogOutput,
   WorkflowNode,
   WorkflowOperand,
   WorkflowStageName,
@@ -91,54 +93,97 @@ function defaultCondition(kind: WorkflowCondition['kind'], visionSources: Workfl
 
 function indicatorAlias(value: WorkflowOperand) {
   const params = value.params || {}
-  const suffix = value.indicator === 'macd'
-    ? `${params.fast || 12}_${params.slow || 26}_${params.signal || 9}`
-    : String(params.length || 20)
+  const suffix = Object.keys(params).sort().map((key) => params[key]).join('_') || 'value'
   return `${value.indicator || 'ema'}_${suffix}${value.component ? `_${value.component}` : ''}`
 }
 
-function IndicatorFields({ value, onChange, title }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string }) {
+const fallbackIndicatorCatalog: IndicatorCatalogItem[] = [
+  {
+    name: 'ema', title: 'EMA 指数移动平均线', default_params: { length: 20 },
+    parameters: [{ name: 'length', label: '周期', default: 20, description: '' }],
+    sources: [{ value: 'close', label: '收盘价', formula: 'close' }],
+    outputs: [{ component: 'value', title: 'EMA线', value_type: 'price_line', comparison_group: 'price', operators: comparisonOptions.map((item) => item[0]), right_operand_kinds: ['constant', 'indicator', 'market_price', 'candle'], compatible_groups: ['price'], condition_kinds: ['comparison', 'cross', 'consecutive', 'indicator_trend'], minimum_points: 2, default_constant: null, constant_options: [] }],
+  },
+]
+
+function indicatorOutput(catalog: IndicatorCatalogItem[], value?: WorkflowOperand): IndicatorCatalogOutput | undefined {
+  const definition = catalog.find((item) => item.name === value?.indicator)
+  return definition?.outputs.find((item) => item.component === (value?.component || 'value')) || definition?.outputs[0]
+}
+
+function compatibleOperand(output: IndicatorCatalogOutput | undefined, current: WorkflowOperand | undefined, catalog: IndicatorCatalogItem[], conditionKind: string): WorkflowOperand {
+  if (!output) return current || defaultOperand('indicator')
+  if (current && output.right_operand_kinds.includes(current.kind)) {
+    if (current.kind !== 'indicator' || output.compatible_groups.includes(indicatorOutput(catalog, current)?.comparison_group || '')) return current
+  }
+  if (output.right_operand_kinds.includes('indicator')) {
+    const definition = catalog.find((item) => item.outputs.some((itemOutput) => output.compatible_groups.includes(itemOutput.comparison_group) && itemOutput.condition_kinds.includes(conditionKind)))
+    const selected = definition?.outputs.find((item) => output.compatible_groups.includes(item.comparison_group) && item.condition_kinds.includes(conditionKind))
+    if (definition && selected) {
+      const operand: WorkflowOperand = { kind: 'indicator', indicator: definition.name, component: selected.component, params: { ...definition.default_params }, source: definition.sources[0]?.value || 'ohlc', offset: -1 }
+      return { ...operand, alias: indicatorAlias(operand) }
+    }
+  }
+  if (output.right_operand_kinds.includes('market_price')) return defaultOperand('market_price')
+  if (output.right_operand_kinds.includes('candle')) return defaultOperand('candle')
+  return { kind: 'constant', value: output.default_constant ?? 0 }
+}
+
+function IndicatorFields({ value, onChange, title, catalog, compatibleGroups, conditionKind }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string; catalog: IndicatorCatalogItem[]; compatibleGroups?: string[]; conditionKind?: string }) {
+  const sourceCatalog = catalog.length ? catalog : fallbackIndicatorCatalog
+  const availableCatalog = sourceCatalog.filter((item) => item.outputs.some((output) => (
+    (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
+    (!conditionKind || output.condition_kinds.includes(conditionKind))
+  )))
   const indicator = value.indicator || 'ema'
   const params = value.params || {}
+  const definition = availableCatalog.find((item) => item.name === indicator) || availableCatalog[0] || sourceCatalog[0]
+  const outputs = definition.outputs.filter((output) => (
+    (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
+    (!conditionKind || output.condition_kinds.includes(conditionKind))
+  ))
+  const selectedOutput = outputs.find((item) => item.component === (value.component || 'value')) || outputs[0]
   const update = (updates: Partial<WorkflowOperand>) => {
     const next = { ...value, ...updates }
     onChange({ ...next, alias: indicatorAlias(next) })
   }
   const selectIndicator = (nextIndicator: string) => {
+    const nextDefinition = availableCatalog.find((item) => item.name === nextIndicator) || sourceCatalog[0]
+    const nextOutputs = nextDefinition.outputs.filter((output) => (
+      (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
+      (!conditionKind || output.condition_kinds.includes(conditionKind))
+    ))
     const next: WorkflowOperand = {
       ...value,
       indicator: nextIndicator,
-      params: nextIndicator === 'macd'
-        ? { fast: 12, slow: 26, signal: 9 }
-        : nextIndicator === 'bbands'
-          ? { length: 20, std: 2 }
-          : nextIndicator === 'stoch'
-            ? { k: 9, d: 3, smooth: 3 }
-            : { length: nextIndicator === 'atr' || nextIndicator === 'rsi' ? 14 : 20 },
-      component: nextIndicator === 'macd' ? 'macd' : nextIndicator === 'bbands' ? 'middle' : nextIndicator === 'stoch' ? 'k' : '',
+      params: { ...nextDefinition.default_params },
+      source: nextDefinition.sources[0]?.value || 'ohlc',
+      component: nextOutputs[0]?.component || 'value',
     }
     onChange({ ...next, alias: indicatorAlias(next) })
   }
   return <fieldset className="workflow-fieldset"><legend>{title}</legend>
-    <label><span>指标</span><FormSelect value={indicator} onChange={selectIndicator} data={[['ema', 'EMA'], ['sma', 'SMA（MA）'], ['wma', 'WMA'], ['rsi', 'RSI'], ['atr', 'ATR'], ['macd', 'MACD'], ['bbands', '布林带'], ['stoch', 'KDJ / Stochastic']]} /></label>
-    {indicator === 'macd' ? <><div className="workflow-field-row three"><label><span>快线</span><input type="number" min="1" max="1000" value={Number(params.fast || 12)} onChange={(event) => update({ params: { ...params, fast: Number(event.target.value) } })} /></label><label><span>慢线</span><input type="number" min="1" max="1000" value={Number(params.slow || 26)} onChange={(event) => update({ params: { ...params, slow: Number(event.target.value) } })} /></label><label><span>信号</span><input type="number" min="1" max="1000" value={Number(params.signal || 9)} onChange={(event) => update({ params: { ...params, signal: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'macd'} onChange={(component) => update({ component })} data={[["macd", "MACD线"], ["signal", "信号线"], ["histogram", "柱状值"]]} /></label></> : indicator === 'bbands' ? <><div className="workflow-field-row"><label><span>周期</span><input type="number" min="1" max="1000" value={Number(params.length || 20)} onChange={(event) => update({ params: { ...params, length: Number(event.target.value) } })} /></label><label><span>标准差</span><input type="number" min="0.1" step="0.1" value={Number(params.std || 2)} onChange={(event) => update({ params: { ...params, std: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'middle'} onChange={(component) => update({ component })} data={[["upper", "上轨"], ["middle", "中轨"], ["lower", "下轨"]]} /></label></> : indicator === 'stoch' ? <><div className="workflow-field-row three"><label><span>K周期</span><input type="number" min="1" value={Number(params.k || 9)} onChange={(event) => update({ params: { ...params, k: Number(event.target.value) } })} /></label><label><span>D周期</span><input type="number" min="1" value={Number(params.d || 3)} onChange={(event) => update({ params: { ...params, d: Number(event.target.value) } })} /></label><label><span>平滑</span><input type="number" min="1" value={Number(params.smooth || 3)} onChange={(event) => update({ params: { ...params, smooth: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'k'} onChange={(component) => update({ component })} data={[["k", "K值"], ["d", "D值"], ["j", "J值"]]} /></label></> : <label><span>周期</span><input type="number" min="1" max="1000" value={Number(params.length || 20)} onChange={(event) => update({ params: { ...params, length: Math.max(1, Number(event.target.value) || 1) } })} /></label>}
-    <div className="workflow-field-row"><label><span>价格源</span><FormSelect value={value.source || 'close'} onChange={(source) => update({ source })} data={[['close', '收盘价'], ['open', '开盘价'], ['high', '最高价'], ['low', '最低价'], ['hl2', '(最高+最低)/2'], ['ohlc4', 'OHLC平均']]} /></label><label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => update({ offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
+    <label><span>指标</span><FormSelect value={definition.name} onChange={selectIndicator} data={availableCatalog.map((item) => [item.name, item.title])} /></label>
+    {definition.parameters.length > 0 && <div className={`workflow-parameter-grid${definition.parameters.length >= 3 ? ' three' : ''}`}>{definition.parameters.map((parameter) => <label key={parameter.name}><span>{parameter.label}</span><input type="number" min="0.000001" step={Number.isInteger(parameter.default) ? 1 : 0.1} value={Number(params[parameter.name] ?? parameter.default)} onChange={(event) => update({ params: { ...params, [parameter.name]: Number(event.target.value) } })} /></label>)}</div>}
+    {outputs.length > 1 && <label><span>指标值</span><FormSelect value={selectedOutput.component} onChange={(component) => update({ component })} data={outputs.map((output) => [output.component, output.title])} /></label>}
+    <div className="workflow-field-row">{definition.sources.length > 0 && <label><span>价格源</span><FormSelect value={value.source || definition.sources[0].value} onChange={(source) => update({ source })} data={definition.sources.map((source) => [source.value, source.label])} /></label>}<label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => update({ offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
   </fieldset>
 }
 
 function FormSelect({ value, data, onChange }: { value: string; data: Array<[string, string]>; onChange: (value: string) => void }) {
-  return <Select className="workflow-mantine-select" value={value} data={data.map(([itemValue, label]) => ({ value: itemValue, label }))} onChange={(next) => next !== null && onChange(next)} allowDeselect={false} comboboxProps={{ withinPortal: true, zIndex: 1200 }} />
+  return <Select className="workflow-mantine-select" value={value} data={data.map(([itemValue, label]) => ({ value: itemValue, label }))} onChange={(next) => next !== null && onChange(next)} allowDeselect={false} searchable={data.length > 12} comboboxProps={{ withinPortal: true, zIndex: 1200 }} />
 }
 
-function OperandFields({ value, onChange, title, allowConstant = true }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string; allowConstant?: boolean }) {
-  const kinds: Array<{ value: WorkflowOperand['kind']; label: string }> = [
+function OperandFields({ value, onChange, title, catalog, allowConstant = true, allowedKinds, compatibleGroups, conditionKind }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string; catalog: IndicatorCatalogItem[]; allowConstant?: boolean; allowedKinds?: string[]; compatibleGroups?: string[]; conditionKind?: string }) {
+  let kinds: Array<{ value: WorkflowOperand['kind']; label: string }> = [
     { value: 'indicator', label: '技术指标' }, { value: 'market_price', label: '当前价格' }, { value: 'candle', label: 'K线价格' },
     { value: 'derived', label: '近期高低点' }, { value: 'position', label: '持仓数据' },
   ]
   if (allowConstant) kinds.push({ value: 'constant', label: '固定数值' })
+  if (allowedKinds?.length) kinds = kinds.filter((item) => allowedKinds.includes(item.value))
   return <fieldset className="workflow-fieldset"><legend>{title}</legend>
     <label><span>数据类型</span><FormSelect value={value.kind} onChange={(kind) => onChange(defaultOperand(kind as WorkflowOperand['kind']))} data={kinds.map((item) => [item.value, item.label])} /></label>
-    {value.kind === 'indicator' && <><IndicatorFields value={value} onChange={onChange} title="指标参数" /><div className="workflow-field-row"><label><span>指标倍数</span><input type="number" step="0.1" value={value.multiplier ?? 1} onChange={(event) => onChange({ ...value, multiplier: Number(event.target.value) })} /></label><label><span>再加数值</span><input type="number" step="0.1" value={value.addend ?? 0} onChange={(event) => onChange({ ...value, addend: Number(event.target.value) })} /></label></div></>}
+    {value.kind === 'indicator' && <><IndicatorFields value={value} onChange={onChange} title="指标参数" catalog={catalog} compatibleGroups={compatibleGroups} conditionKind={conditionKind} /><div className="workflow-field-row"><label><span>指标倍数</span><input type="number" step="0.1" value={value.multiplier ?? 1} onChange={(event) => onChange({ ...value, multiplier: Number(event.target.value) })} /></label><label><span>再加数值</span><input type="number" step="0.1" value={value.addend ?? 0} onChange={(event) => onChange({ ...value, addend: Number(event.target.value) })} /></label></div></>}
     {value.kind === 'constant' && <label><span>数值</span><input type="number" value={Number(value.value || 0)} onChange={(event) => onChange({ ...value, value: Number(event.target.value) })} /></label>}
     {value.kind === 'market_price' && <label><span>价格</span><FormSelect value={value.name || 'bid'} onChange={(name) => onChange({ ...value, name })} data={[["bid", "Bid"], ["ask", "Ask"]]} /></label>}
     {value.kind === 'candle' && <div className="workflow-field-row"><label><span>K线字段</span><FormSelect value={value.name || 'close'} onChange={(name) => onChange({ ...value, name })} data={[["open", "开盘价"], ["high", "最高价"], ["low", "最低价"], ["close", "收盘价"]]} /></label><label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => onChange({ ...value, offset: Number(offset) })} data={[["-1", "最新已收盘"], ["-2", "前一根"], ["-3", "前两根"]]} /></label></div>}
@@ -147,9 +192,15 @@ function OperandFields({ value, onChange, title, allowConstant = true }: { value
   </fieldset>
 }
 
-function ConditionFields({ condition, visionSources, onChange }: { condition?: WorkflowCondition; visionSources: WorkflowNode[]; onChange: (value: WorkflowCondition) => void }) {
+function ConditionFields({ condition, visionSources, indicatorCatalog, onChange }: { condition?: WorkflowCondition; visionSources: WorkflowNode[]; indicatorCatalog: IndicatorCatalogItem[]; onChange: (value: WorkflowCondition) => void }) {
   if (!condition) return <label><span>条件类型</span><FormSelect value="" onChange={(kind) => onChange(defaultCondition(kind as WorkflowCondition['kind'], visionSources))} data={[["", "请选择条件"], ...conditionOptions.map((item): [string, string] => [item.value, item.label])]} /></label>
   const patch = (updates: Partial<WorkflowCondition>) => onChange({ ...condition, ...updates })
+  const catalog = indicatorCatalog.length ? indicatorCatalog : fallbackIndicatorCatalog
+  const leftCapability = condition.left?.kind === 'indicator' ? indicatorOutput(catalog, condition.left) : undefined
+  const updateCrossLeft = (left: WorkflowOperand) => {
+    const capability = indicatorOutput(catalog, left)
+    patch({ left, right: compatibleOperand(capability, condition.right, catalog, 'cross') })
+  }
   const visionSource = visionSources.find((node) => node.id === condition.left?.source_node_id)
   const selectVisionSource = (sourceId: string) => {
     const source = visionSources.find((node) => node.id === sourceId)
@@ -162,10 +213,10 @@ function ConditionFields({ condition, visionSources, onChange }: { condition?: W
   return <>
     <label><span>条件类型</span><FormSelect value={condition.kind} onChange={(kind) => onChange(defaultCondition(kind as WorkflowCondition['kind'], visionSources))} data={conditionOptions.map((item) => [item.value, item.label])} /></label>
     {condition.kind === 'vision_result' && (visionSources.length ? <><label><span>截图输出</span><FormSelect value={condition.left?.source_node_id || visionSources[0].id} onChange={selectVisionSource} data={visionSources.map((item) => [item.id, item.output?.label || '截图识别结果'])} /></label><label><span>比较方式</span><FormSelect value={condition.operator || 'eq'} onChange={(operator) => patch({ operator: operator as 'eq' | 'neq' })} data={[["eq", "等于"], ["neq", "不等于"]]} /></label><label><span>识别结果</span><FormSelect value={String(condition.right?.value ?? '')} onChange={(result) => patch({ right: { kind: 'constant', value: result } })} data={(visionSource?.output?.options || visionSources[0].output?.options || []).map((item) => [item.value, item.label])} /></label></> : <p className="workflow-inline-note warning">当前节点前面没有截图信息提取节点，请先在流程上方添加截图信息提取。</p>)}
-    {condition.kind === 'cross' && <><IndicatorFields title="左侧指标" value={condition.left || defaultOperand('indicator')} onChange={(left) => patch({ left })} /><label><span>交叉方向</span><FormSelect value={condition.direction || 'above'} onChange={(direction) => patch({ direction: direction as 'above' | 'below' })} data={[["above", "上穿"], ["below", "下破"]]} /></label><IndicatorFields title="右侧指标" value={condition.right || defaultOperand('indicator')} onChange={(right) => patch({ right })} /><label><span>最近检查范围</span><div className="workflow-suffix-input"><input type="number" min="2" max="100" value={condition.lookback || 3} onChange={(event) => patch({ lookback: Number(event.target.value) })} /><b>根已收盘K线</b></div></label></>}
-    {['comparison', 'breakout', 'atr_distance', 'position_state'].includes(condition.kind) && <><OperandFields title="左侧数据" value={condition.left || defaultOperand(condition.kind === 'position_state' ? 'position' : 'market_price')} onChange={(left) => patch({ left })} /><label><span>比较方式</span><FormSelect value={condition.operator || 'gt'} onChange={(operator) => patch({ operator: operator as WorkflowCondition['operator'] })} data={comparisonOptions} /></label><OperandFields title="右侧数据" value={condition.right || defaultOperand('constant')} onChange={(right) => patch({ right })} /></>}
-    {condition.kind === 'indicator_trend' && <><IndicatorFields title="判断指标" value={condition.left || defaultOperand('indicator')} onChange={(left) => patch({ left })} /><div className="workflow-field-row"><label><span>方向</span><FormSelect value={condition.direction || 'up'} onChange={(direction) => patch({ direction: direction as 'up' | 'down' })} data={[["up", "连续上升"], ["down", "连续下降"]]} /></label><label><span>连续数量</span><input type="number" min="2" max="100" value={condition.count || 3} onChange={(event) => patch({ count: Number(event.target.value), lookback: Number(event.target.value) })} /></label></div></>}
-    {condition.kind === 'consecutive' && <><OperandFields title="左侧数据" value={condition.left || defaultOperand('candle')} onChange={(left) => patch({ left })} /><label><span>比较方式</span><FormSelect value={condition.operator || 'gt'} onChange={(operator) => patch({ operator: operator as WorkflowCondition['operator'] })} data={comparisonOptions} /></label><OperandFields title="右侧数据" value={condition.right || defaultOperand('constant')} onChange={(right) => patch({ right })} /><label><span>连续数量</span><div className="workflow-suffix-input"><input type="number" min="2" max="100" value={condition.count || 3} onChange={(event) => patch({ count: Number(event.target.value), lookback: Number(event.target.value) })} /><b>根K线</b></div></label></>}
+    {condition.kind === 'cross' && <><IndicatorFields title="左侧指标" value={condition.left || defaultOperand('indicator')} onChange={updateCrossLeft} catalog={catalog} conditionKind="cross" /><label><span>交叉方向</span><FormSelect value={condition.direction || 'above'} onChange={(direction) => patch({ direction: direction as 'above' | 'below' })} data={[["above", "上穿"], ["below", "下破"]]} /></label><OperandFields title="右侧数据" value={condition.right || compatibleOperand(leftCapability, undefined, catalog, 'cross')} onChange={(right) => patch({ right })} catalog={catalog} allowedKinds={leftCapability?.right_operand_kinds} compatibleGroups={leftCapability?.compatible_groups} conditionKind="cross" /><label><span>最近检查范围</span><div className="workflow-suffix-input"><input type="number" min="2" max="100" value={condition.lookback || 3} onChange={(event) => patch({ lookback: Number(event.target.value) })} /><b>根已收盘K线</b></div></label></>}
+    {['comparison', 'breakout', 'atr_distance', 'position_state'].includes(condition.kind) && <><OperandFields title="左侧数据" value={condition.left || defaultOperand(condition.kind === 'position_state' ? 'position' : 'market_price')} onChange={(left) => patch({ left, right: left.kind === 'indicator' ? compatibleOperand(indicatorOutput(catalog, left), condition.right, catalog, 'comparison') : condition.right })} catalog={catalog} /><label><span>比较方式</span><FormSelect value={condition.operator || 'gt'} onChange={(operator) => patch({ operator: operator as WorkflowCondition['operator'] })} data={(leftCapability?.operators || comparisonOptions.map((item) => item[0])).map((operator) => comparisonOptions.find((item) => item[0] === operator) || [operator, operator])} /></label><OperandFields title="右侧数据" value={condition.right || defaultOperand('constant')} onChange={(right) => patch({ right })} catalog={catalog} allowedKinds={leftCapability?.right_operand_kinds} compatibleGroups={leftCapability?.compatible_groups} conditionKind="comparison" /></>}
+    {condition.kind === 'indicator_trend' && <><IndicatorFields title="判断指标" value={condition.left || defaultOperand('indicator')} onChange={(left) => patch({ left })} catalog={catalog} conditionKind="indicator_trend" /><div className="workflow-field-row"><label><span>方向</span><FormSelect value={condition.direction || 'up'} onChange={(direction) => patch({ direction: direction as 'up' | 'down' })} data={[["up", "连续上升"], ["down", "连续下降"]]} /></label><label><span>连续数量</span><input type="number" min="2" max="100" value={condition.count || 3} onChange={(event) => patch({ count: Number(event.target.value), lookback: Number(event.target.value) })} /></label></div></>}
+    {condition.kind === 'consecutive' && <><OperandFields title="左侧数据" value={condition.left || defaultOperand('candle')} onChange={(left) => patch({ left })} catalog={catalog} /><label><span>比较方式</span><FormSelect value={condition.operator || 'gt'} onChange={(operator) => patch({ operator: operator as WorkflowCondition['operator'] })} data={comparisonOptions} /></label><OperandFields title="右侧数据" value={condition.right || defaultOperand('constant')} onChange={(right) => patch({ right })} catalog={catalog} /><label><span>连续数量</span><div className="workflow-suffix-input"><input type="number" min="2" max="100" value={condition.count || 3} onChange={(event) => patch({ count: Number(event.target.value), lookback: Number(event.target.value) })} /><b>根K线</b></div></label></>}
     {condition.kind === 'candle_pattern' && <div className="workflow-field-row"><label><span>K线形态</span><FormSelect value={condition.pattern || 'bullish_engulfing'} onChange={(pattern) => patch({ pattern })} data={[["bullish_engulfing", "看涨吞没"], ["bearish_engulfing", "看跌吞没"], ["bullish_pinbar", "看涨 Pin Bar"], ["bearish_pinbar", "看跌 Pin Bar"], ["doji", "十字星"]]} /></label><label><span>最近范围</span><input type="number" min="1" max="100" value={condition.lookback || 1} onChange={(event) => patch({ lookback: Number(event.target.value) })} /></label></div>}
     {condition.kind === 'market_structure' && <div className="workflow-field-row"><label><span>结构</span><FormSelect value={condition.pattern || 'HH'} onChange={(pattern) => patch({ pattern })} data={[["HH", "更高高点 HH"], ["HL", "更高低点 HL"], ["LH", "更低高点 LH"], ["LL", "更低低点 LL"]]} /></label><label><span>检查范围</span><input type="number" min="2" max="100" value={condition.lookback || 5} onChange={(event) => patch({ lookback: Number(event.target.value) })} /></label></div>}
     {condition.kind === 'group' && <><label><span>组合方式</span><FormSelect value={condition.group_operator || 'all'} onChange={(group_operator) => patch({ group_operator: group_operator as 'all' | 'any' })} data={[["all", "全部满足（AND）"], ["any", "任一满足（OR）"]]} /></label><p className="workflow-inline-note">组合条件的子规则将在下一步改成可展开的规则列表；流程分支本身也可以连续添加多个判断节点。</p></>}
@@ -247,7 +298,7 @@ function ActionFields({ node, stage, onChange }: { node: WorkflowNode; stage: Wo
   </>
 }
 
-export function NodeConfigPanel({ node, nodes, visionSources, stage, requirements, onChange, onRequirementsChange, onDelete }: { node?: WorkflowNode; nodes: WorkflowNode[]; visionSources: WorkflowNode[]; stage: WorkflowStageName; requirements: WorkflowDataRequirements; onChange: (node: WorkflowNode) => void; onRequirementsChange: (value: WorkflowDataRequirements) => void; onDelete: () => void }) {
+export function NodeConfigPanel({ node, nodes, visionSources, indicatorCatalog, stage, requirements, onChange, onRequirementsChange, onDelete }: { node?: WorkflowNode; nodes: WorkflowNode[]; visionSources: WorkflowNode[]; indicatorCatalog: IndicatorCatalogItem[]; stage: WorkflowStageName; requirements: WorkflowDataRequirements; onChange: (node: WorkflowNode) => void; onRequirementsChange: (value: WorkflowDataRequirements) => void; onDelete: () => void }) {
   if (!node) return <aside className="workflow-config-panel"><p>请选择一个节点进行设置。</p></aside>
   const canDelete = node.type !== 'entry'
   const emit = (nextNode: WorkflowNode) => onChange({ ...nextNode, label: describeWorkflowNode(nextNode, nodes) })
@@ -255,7 +306,7 @@ export function NodeConfigPanel({ node, nodes, visionSources, stage, requirement
   return <aside className="workflow-config-panel">
     <div className="workflow-config-title"><div><small>节点设置</small><h3>{displayLabel}</h3></div>{canDelete && <button type="button" title="删除节点" onClick={onDelete}><Trash2 size={16} /></button>}</div>
     {node.type === 'entry' && <><label><span>数据入口</span><input value={stage === 'open' ? 'EA提供开仓数据' : 'EA提供风控数据'} readOnly /></label><label><span>EA提供的数据</span><FormSelect value={requirements.data_type} onChange={(data_type) => onRequirementsChange({ ...requirements, data_type: data_type as WorkflowDataRequirements['data_type'] })} data={[["kline", "K线数据"], ["screenshot", "EA图表截图"], ["both", "K线 + EA图表截图"]]} /></label>{requirements.data_type !== 'screenshot' && <label><span>K线数量</span><div className="workflow-suffix-input"><input type="number" min="10" max="1000" step="10" value={requirements.kline_count} onChange={(event) => onRequirementsChange({ ...requirements, kline_count: Math.max(10, Number(event.target.value) || 10) })} /><b>根</b></div></label>}<p className="workflow-config-tip">入口由系统固定创建。点击节点下方的“+”添加第一条判断规则；实际指标需要更多历史数据时，服务端会自动提高K线数量。</p></>}
-    {node.type === 'condition' && <ConditionFields condition={node.condition} visionSources={visionSources} onChange={(condition) => emit({ ...node, condition })} />}
+    {node.type === 'condition' && <ConditionFields condition={node.condition} visionSources={visionSources} indicatorCatalog={indicatorCatalog} onChange={(condition) => emit({ ...node, condition })} />}
     {node.type === 'vision_extract' && <VisionExtractFields node={node} nodes={nodes} onChange={emit} />}
     {node.type === 'ai_condition' && <><label><span>AI判断要求</span><textarea rows={7} value={node.instruction || ''} onChange={(event) => emit({ ...node, instruction: event.target.value })} /></label><label><span>提供给AI的数据</span><FormSelect value={node.data_type || 'kline'} onChange={(data_type) => emit({ ...node, data_type: data_type as 'kline' | 'screenshot' | 'both' })} data={[["kline", "K线"], ["screenshot", "截图"], ["both", "K线 + 截图"]]} /></label><p className="workflow-inline-note warning">此节点会调用AI，并在后台标记为“未精确化条件”。后续条件库支持后可转换为精确节点。</p></>}
     {node.type === 'action' && <ActionFields node={node} stage={stage} onChange={emit} />}
