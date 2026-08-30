@@ -13,6 +13,7 @@ export type WorkflowOperand = {
   name?: string
   value?: number | string | boolean | null
   indicator?: string
+  component?: string
   alias?: string
   source?: string
   params?: Record<string, number | string>

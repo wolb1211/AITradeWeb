@@ -19,6 +19,7 @@
 .workflow-config-panel .workflow-mantine-select { width: 100%; }
 .workflow-config-panel .workflow-mantine-select .mantine-Select-input { min-height: 38px; padding: 8px 32px 8px 10px; color: var(--text); border-color: var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; }
 .workflow-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.workflow-field-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .workflow-fieldset { margin: 0; padding: 11px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 9px; }
 .workflow-fieldset legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
 .workflow-fieldset .workflow-fieldset { padding: 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); }

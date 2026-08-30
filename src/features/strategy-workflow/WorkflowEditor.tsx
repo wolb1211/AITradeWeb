@@ -19,6 +19,7 @@ import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStage, WorkflowStage
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { validateWorkflowDraft, type WorkflowValidationIssue } from './validation'
 import { pruneWorkflowStage } from './graph'
+import { describeWorkflowNode } from './labels'
 import '@xyflow/react/dist/style.css'
 import './workflow-editor.css'
 
@@ -45,11 +46,12 @@ function nodeIcon(type: WorkflowNode['type']) {
 
 function StrategyNode({ data }: NodeProps<FlowNode<EditorNodeData>>) {
   const node = data.workflowNode
+  const displayLabel = describeWorkflowNode(node)
   const condition = node.type === 'condition' || node.type === 'vision_condition' || node.type === 'ai_condition'
   return <div className={`${nodeClass(node.type)}${data.selected ? ' selected' : ''}`} onClick={() => data.onSelect(node.id)}>
     {node.type !== 'entry' && <Handle type="target" position={Position.Top} isConnectable={false} />}
     <div className="workflow-node-head">{nodeIcon(node.type)}<span>{node.type === 'entry' ? '流程入口' : condition ? '判断条件' : '执行动作'}</span></div>
-    <strong>{node.label}</strong>
+    <strong>{displayLabel}</strong>
     {node.type === 'vision_condition' && <small>AI截图识别</small>}
     {node.type === 'ai_condition' && <small>开放语义判断</small>}
     {node.type === 'entry' && <>
@@ -212,11 +214,12 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
   const selected = value[stageName].nodes.find((node) => node.id === selectedId)
   useEffect(() => { setSelectedId(value[stageName].entry_node_id) }, [stageName])
   const updateSelected = useCallback((nextNode: WorkflowNode) => {
+    const normalizedNode = { ...nextNode, label: describeWorkflowNode(nextNode) }
     onChange({
       ...value,
       [stageName]: {
         ...value[stageName],
-        nodes: value[stageName].nodes.map((node) => node.id === selectedId ? nextNode : node),
+        nodes: value[stageName].nodes.map((node) => node.id === selectedId ? normalizedNode : node),
       },
     })
   }, [onChange, selectedId, stageName, value])
@@ -256,11 +259,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     const id = `${stageName}_${type}_${Date.now()}`
     let node: WorkflowNode
     if (type === 'condition') node = {
-      id, type, label: '新判断条件',
-      condition: {
-        kind: 'comparison', description: '请设置判断条件',
-        left: { kind: 'market_price', name: 'bid' }, operator: 'gt', right: { kind: 'constant', value: 0 },
-      },
+      id, type, label: '请选择条件',
     }
     else if (type === 'vision_condition') node = {
       id, type, label: '截图识别规则', instruction: '请描述需要从最新截图中识别的信号',

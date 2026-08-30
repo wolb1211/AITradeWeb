@@ -8,6 +8,7 @@ import type {
   WorkflowOperand,
   WorkflowStageName,
 } from './types'
+import { describeWorkflowNode } from './labels'
 
 const conditionOptions: Array<{ value: WorkflowCondition['kind']; label: string }> = [
   { value: 'comparison', label: '数值比较' },
@@ -78,11 +79,40 @@ function defaultCondition(kind: WorkflowCondition['kind']): WorkflowCondition {
   }
 }
 
+function indicatorAlias(value: WorkflowOperand) {
+  const params = value.params || {}
+  const suffix = value.indicator === 'macd'
+    ? `${params.fast || 12}_${params.slow || 26}_${params.signal || 9}`
+    : String(params.length || 20)
+  return `${value.indicator || 'ema'}_${suffix}${value.component ? `_${value.component}` : ''}`
+}
+
 function IndicatorFields({ value, onChange, title }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string }) {
-  const length = Number(value.params?.length || 20)
+  const indicator = value.indicator || 'ema'
+  const params = value.params || {}
+  const update = (updates: Partial<WorkflowOperand>) => {
+    const next = { ...value, ...updates }
+    onChange({ ...next, alias: indicatorAlias(next) })
+  }
+  const selectIndicator = (nextIndicator: string) => {
+    const next: WorkflowOperand = {
+      ...value,
+      indicator: nextIndicator,
+      params: nextIndicator === 'macd'
+        ? { fast: 12, slow: 26, signal: 9 }
+        : nextIndicator === 'bbands'
+          ? { length: 20, std: 2 }
+          : nextIndicator === 'stoch'
+            ? { k: 9, d: 3, smooth: 3 }
+            : { length: nextIndicator === 'atr' || nextIndicator === 'rsi' ? 14 : 20 },
+      component: nextIndicator === 'macd' ? 'macd' : nextIndicator === 'bbands' ? 'middle' : nextIndicator === 'stoch' ? 'k' : '',
+    }
+    onChange({ ...next, alias: indicatorAlias(next) })
+  }
   return <fieldset className="workflow-fieldset"><legend>{title}</legend>
-    <div className="workflow-field-row"><label><span>指标</span><FormSelect value={value.indicator || 'ema'} onChange={(next) => onChange({ ...value, indicator: next, alias: `${next}${length}` })} data={[['ema', 'EMA'], ['sma', 'SMA（MA）'], ['wma', 'WMA'], ['rsi', 'RSI'], ['atr', 'ATR'], ['macd', 'MACD'], ['bbands', '布林带']]} /></label><label><span>周期</span><input type="number" min="1" max="1000" value={length} onChange={(event) => { const next = Math.max(1, Number(event.target.value) || 1); onChange({ ...value, params: { ...value.params, length: next }, alias: `${value.indicator || 'ema'}${next}` }) }} /></label></div>
-    <div className="workflow-field-row"><label><span>价格源</span><FormSelect value={value.source || 'close'} onChange={(source) => onChange({ ...value, source })} data={[['close', '收盘价'], ['open', '开盘价'], ['high', '最高价'], ['low', '最低价'], ['hl2', '(最高+最低)/2'], ['ohlc4', 'OHLC平均']]} /></label><label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => onChange({ ...value, offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
+    <label><span>指标</span><FormSelect value={indicator} onChange={selectIndicator} data={[['ema', 'EMA'], ['sma', 'SMA（MA）'], ['wma', 'WMA'], ['rsi', 'RSI'], ['atr', 'ATR'], ['macd', 'MACD'], ['bbands', '布林带'], ['stoch', 'KDJ / Stochastic']]} /></label>
+    {indicator === 'macd' ? <><div className="workflow-field-row three"><label><span>快线</span><input type="number" min="1" max="1000" value={Number(params.fast || 12)} onChange={(event) => update({ params: { ...params, fast: Number(event.target.value) } })} /></label><label><span>慢线</span><input type="number" min="1" max="1000" value={Number(params.slow || 26)} onChange={(event) => update({ params: { ...params, slow: Number(event.target.value) } })} /></label><label><span>信号</span><input type="number" min="1" max="1000" value={Number(params.signal || 9)} onChange={(event) => update({ params: { ...params, signal: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'macd'} onChange={(component) => update({ component })} data={[["macd", "MACD线"], ["signal", "信号线"], ["histogram", "柱状值"]]} /></label></> : indicator === 'bbands' ? <><div className="workflow-field-row"><label><span>周期</span><input type="number" min="1" max="1000" value={Number(params.length || 20)} onChange={(event) => update({ params: { ...params, length: Number(event.target.value) } })} /></label><label><span>标准差</span><input type="number" min="0.1" step="0.1" value={Number(params.std || 2)} onChange={(event) => update({ params: { ...params, std: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'middle'} onChange={(component) => update({ component })} data={[["upper", "上轨"], ["middle", "中轨"], ["lower", "下轨"]]} /></label></> : indicator === 'stoch' ? <><div className="workflow-field-row three"><label><span>K周期</span><input type="number" min="1" value={Number(params.k || 9)} onChange={(event) => update({ params: { ...params, k: Number(event.target.value) } })} /></label><label><span>D周期</span><input type="number" min="1" value={Number(params.d || 3)} onChange={(event) => update({ params: { ...params, d: Number(event.target.value) } })} /></label><label><span>平滑</span><input type="number" min="1" value={Number(params.smooth || 3)} onChange={(event) => update({ params: { ...params, smooth: Number(event.target.value) } })} /></label></div><label><span>指标值</span><FormSelect value={value.component || 'k'} onChange={(component) => update({ component })} data={[["k", "K值"], ["d", "D值"], ["j", "J值"]]} /></label></> : <label><span>周期</span><input type="number" min="1" max="1000" value={Number(params.length || 20)} onChange={(event) => update({ params: { ...params, length: Math.max(1, Number(event.target.value) || 1) } })} /></label>}
+    <div className="workflow-field-row"><label><span>价格源</span><FormSelect value={value.source || 'close'} onChange={(source) => update({ source })} data={[['close', '收盘价'], ['open', '开盘价'], ['high', '最高价'], ['low', '最低价'], ['hl2', '(最高+最低)/2'], ['ohlc4', 'OHLC平均']]} /></label><label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => update({ offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
   </fieldset>
 }
 
@@ -107,7 +137,8 @@ function OperandFields({ value, onChange, title, allowConstant = true }: { value
   </fieldset>
 }
 
-function ConditionFields({ condition, onChange }: { condition: WorkflowCondition; onChange: (value: WorkflowCondition) => void }) {
+function ConditionFields({ condition, onChange }: { condition?: WorkflowCondition; onChange: (value: WorkflowCondition) => void }) {
+  if (!condition) return <label><span>条件类型</span><FormSelect value="" onChange={(kind) => onChange(defaultCondition(kind as WorkflowCondition['kind']))} data={[["", "请选择条件"], ...conditionOptions.map((item): [string, string] => [item.value, item.label])]} /></label>
   const patch = (updates: Partial<WorkflowCondition>) => onChange({ ...condition, ...updates })
   return <>
     <label><span>条件类型</span><FormSelect value={condition.kind} onChange={(kind) => onChange(defaultCondition(kind as WorkflowCondition['kind']))} data={conditionOptions.map((item) => [item.value, item.label])} /></label>
@@ -145,14 +176,15 @@ function ActionFields({ node, stage, onChange }: { node: WorkflowNode; stage: Wo
 export function NodeConfigPanel({ node, stage, requirements, onChange, onRequirementsChange, onDelete }: { node?: WorkflowNode; stage: WorkflowStageName; requirements: WorkflowDataRequirements; onChange: (node: WorkflowNode) => void; onRequirementsChange: (value: WorkflowDataRequirements) => void; onDelete: () => void }) {
   if (!node) return <aside className="workflow-config-panel"><p>请选择一个节点进行设置。</p></aside>
   const canDelete = node.type !== 'entry'
+  const emit = (nextNode: WorkflowNode) => onChange({ ...nextNode, label: describeWorkflowNode(nextNode) })
+  const displayLabel = describeWorkflowNode(node)
   return <aside className="workflow-config-panel">
-    <div className="workflow-config-title"><div><small>节点设置</small><h3>{node.label}</h3></div>{canDelete && <button type="button" title="删除节点" onClick={onDelete}><Trash2 size={16} /></button>}</div>
-    <label><span>显示名称</span><input value={node.label} onChange={(event) => onChange({ ...node, label: event.target.value })} /></label>
+    <div className="workflow-config-title"><div><small>节点设置</small><h3>{displayLabel}</h3></div>{canDelete && <button type="button" title="删除节点" onClick={onDelete}><Trash2 size={16} /></button>}</div>
     {node.type === 'entry' && <><label><span>流程入口</span><input value={stage === 'open' ? '开仓分析' : '持仓风控'} readOnly /></label><label><span>EA提供的数据</span><FormSelect value={requirements.data_type} onChange={(data_type) => onRequirementsChange({ ...requirements, data_type: data_type as WorkflowDataRequirements['data_type'] })} data={[["kline", "K线数据"], ["screenshot", "图表截图"], ["both", "K线 + 截图"]]} /></label>{requirements.data_type !== 'screenshot' && <label><span>K线数量</span><div className="workflow-suffix-input"><input type="number" min="10" max="1000" step="10" value={requirements.kline_count} onChange={(event) => onRequirementsChange({ ...requirements, kline_count: Math.max(10, Number(event.target.value) || 10) })} /><b>根</b></div></label>}<p className="workflow-config-tip">入口由系统固定创建。点击节点下方的“+”添加第一条判断规则；实际指标需要更多历史数据时，服务端会自动提高K线数量。</p></>}
-    {node.type === 'condition' && <ConditionFields condition={node.condition || defaultCondition('comparison')} onChange={(condition) => onChange({ ...node, condition })} />}
-    {node.type === 'vision_condition' && <><label><span>截图识别要求</span><textarea rows={7} value={node.instruction || ''} onChange={(event) => onChange({ ...node, instruction: event.target.value })} /></label><div className="workflow-field-row"><label><span>成立结果</span><input value={node.expected_result || 'matched'} onChange={(event) => onChange({ ...node, expected_result: event.target.value })} /></label><label><span>观察范围</span><div className="workflow-suffix-input"><input type="number" min="1" max="100" value={node.lookback || 3} onChange={(event) => onChange({ ...node, lookback: Number(event.target.value) })} /><b>根K线</b></div></label></div><p className="workflow-inline-note">该节点只负责从截图提取事实，是否开仓或平仓仍由后面的流程动作决定。</p></>}
-    {node.type === 'ai_condition' && <><label><span>AI判断要求</span><textarea rows={7} value={node.instruction || ''} onChange={(event) => onChange({ ...node, instruction: event.target.value })} /></label><label><span>提供给AI的数据</span><FormSelect value={node.data_type || 'kline'} onChange={(data_type) => onChange({ ...node, data_type: data_type as 'kline' | 'screenshot' | 'both' })} data={[["kline", "K线"], ["screenshot", "截图"], ["both", "K线 + 截图"]]} /></label><p className="workflow-inline-note warning">此节点会调用AI，并在后台标记为“未精确化条件”。后续条件库支持后可转换为精确节点。</p></>}
-    {node.type === 'action' && <ActionFields node={node} stage={stage} onChange={onChange} />}
+    {node.type === 'condition' && <ConditionFields condition={node.condition} onChange={(condition) => emit({ ...node, condition })} />}
+    {node.type === 'vision_condition' && <><label><span>截图识别要求</span><textarea rows={7} value={node.instruction || ''} onChange={(event) => emit({ ...node, instruction: event.target.value })} /></label><div className="workflow-field-row"><label><span>成立结果</span><input value={node.expected_result || 'matched'} onChange={(event) => emit({ ...node, expected_result: event.target.value })} /></label><label><span>观察范围</span><div className="workflow-suffix-input"><input type="number" min="1" max="100" value={node.lookback || 3} onChange={(event) => emit({ ...node, lookback: Number(event.target.value) })} /><b>根K线</b></div></label></div><p className="workflow-inline-note">该节点只负责从截图提取事实，是否开仓或平仓仍由后面的流程动作决定。</p></>}
+    {node.type === 'ai_condition' && <><label><span>AI判断要求</span><textarea rows={7} value={node.instruction || ''} onChange={(event) => emit({ ...node, instruction: event.target.value })} /></label><label><span>提供给AI的数据</span><FormSelect value={node.data_type || 'kline'} onChange={(data_type) => emit({ ...node, data_type: data_type as 'kline' | 'screenshot' | 'both' })} data={[["kline", "K线"], ["screenshot", "截图"], ["both", "K线 + 截图"]]} /></label><p className="workflow-inline-note warning">此节点会调用AI，并在后台标记为“未精确化条件”。后续条件库支持后可转换为精确节点。</p></>}
+    {node.type === 'action' && <ActionFields node={node} stage={stage} onChange={emit} />}
     {node.type !== 'entry' && <p className="workflow-config-tip">条件节点固定包含“是”和“否”两个分支；保存前系统会检查未连接、冲突和缺少参数的规则。</p>}
   </aside>
 }
