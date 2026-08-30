@@ -125,10 +125,11 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
   </ReactFlow>
 }
 
-export function WorkflowEditor({ value, onChange, onGenerateWithAi }: {
+export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus }: {
   value: CustomStrategyWorkflow
   onChange: (value: CustomStrategyWorkflow) => void
   onGenerateWithAi?: () => void
+  draftStatus?: string
 }) {
   const [stageName, setStageName] = useState<WorkflowStageName>('open')
   const [selectedId, setSelectedId] = useState(value.open.entry_node_id)
@@ -211,7 +212,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi }: {
         <button type="button" className={stageName === 'open' ? 'active' : ''} onClick={() => setStageName('open')}>开仓流程</button>
         <button type="button" className={stageName === 'position' ? 'active' : ''} onClick={() => setStageName('position')}>持仓风控</button>
       </div>
-      <div className="workflow-toolbar-actions"><button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value))}><Check size={16} />检查流程</button><button className="workflow-ai-generate" type="button" onClick={onGenerateWithAi}><Sparkles size={16} />AI帮我生成</button></div>
+      <div className="workflow-toolbar-actions">{draftStatus && <span className="workflow-draft-status"><Check size={13} />{draftStatus}</span>}<button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value))}><Check size={16} />检查流程</button><button className="workflow-ai-generate" type="button" onClick={onGenerateWithAi}><Sparkles size={16} />AI帮我生成</button></div>
     </div>
     <div className="workflow-editor-body">
       <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} /></ReactFlowProvider></div>

@@ -8,12 +8,13 @@ import {
 import { Loader, Menu, Modal, Select } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { lazy, Suspense, type FormEvent, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EmptyState, PageHeading, StatCard, StatusPill, TextLink } from '../components/Ui'
 import type { PnlCurvePoint } from '../components/PnlChart'
 import { ApiError, apiRequest, authUserDisplayName, authUserVipDetail, authUserVipLabel, clearSession, getStoredUser, post, saveStoredUser, type AuthUser } from '../lib/api'
 import { createDefaultWorkflow } from '../features/strategy-workflow/defaults'
+import { loadWorkflowDraft, saveWorkflowDraft, workflowDraftKey } from '../features/strategy-workflow/draftStorage'
 
 const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({ default: module.PnlChart })))
 const WorkflowEditor = lazy(() => import('../features/strategy-workflow/WorkflowEditor').then((module) => ({ default: module.WorkflowEditor })))
@@ -805,11 +806,45 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
 export function StrategyCreatePage() { return <><PageHeading eyebrow="NEW DEPLOYMENT" title="创建策略" description="完成配置后，系统将生成用于 MT4/MT5 的唯一部署 Key。" /><StrategyForm /></> }
 
 export function WorkflowPrototypePage() {
-  const [workflow, setWorkflow] = useState(createDefaultWorkflow)
+  const draftKey = useMemo(() => workflowDraftKey(String(getStoredUser()?.id || 'anonymous')), [])
+  const initialDraft = useMemo(() => loadWorkflowDraft(draftKey), [draftKey])
+  const [workflow, setWorkflow] = useState(() => initialDraft?.workflow || createDefaultWorkflow())
+  const [draftDirty, setDraftDirty] = useState(false)
+  const [draftSavedAt, setDraftSavedAt] = useState(initialDraft?.saved_at || '')
+  const workflowRef = useRef(workflow)
+  const draftDirtyRef = useRef(false)
   const [aiOpened, setAiOpened] = useState(false)
+  useEffect(() => {
+    if (!draftDirty) return
+    const timer = window.setTimeout(() => {
+      const draft = saveWorkflowDraft(draftKey, workflow)
+      setDraftSavedAt(draft.saved_at)
+      setDraftDirty(false)
+      draftDirtyRef.current = false
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [draftDirty, draftKey, workflow])
+  useEffect(() => {
+    const flushDraft = () => {
+      if (draftDirtyRef.current) saveWorkflowDraft(draftKey, workflowRef.current)
+    }
+    window.addEventListener('beforeunload', flushDraft)
+    return () => { window.removeEventListener('beforeunload', flushDraft); flushDraft() }
+  }, [draftKey])
+  const updateWorkflow = (next: typeof workflow) => {
+    workflowRef.current = next
+    draftDirtyRef.current = true
+    setWorkflow(next)
+    setDraftDirty(true)
+  }
+  const draftStatus = draftDirty
+    ? '草稿保存中...'
+    : draftSavedAt
+      ? `草稿已保存 ${new Date(draftSavedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+      : '修改后自动保存草稿'
   return <>
     <PageHeading eyebrow="VISUAL STRATEGY" title="可视化策略编辑器" description="通过条件分支搭建开仓与持仓风控逻辑；当前页面用于确认第一版编辑体验。" />
-    <Suspense fallback={<div className="panel loading-block"><Loader color="teal" size="md" />正在加载流程编辑器...</div>}><WorkflowEditor value={workflow} onChange={setWorkflow} onGenerateWithAi={() => setAiOpened(true)} /></Suspense>
+    <Suspense fallback={<div className="panel loading-block"><Loader color="teal" size="md" />正在加载流程编辑器...</div>}><WorkflowEditor value={workflow} onChange={updateWorkflow} onGenerateWithAi={() => setAiOpened(true)} draftStatus={draftStatus} /></Suspense>
     <Modal opened={aiOpened} onClose={() => setAiOpened(false)} title="AI帮我生成流程" centered size="xl">
       <div className="custom-rule-grid">
         <label><span>开仓逻辑</span><textarea rows={8} placeholder="请用自然语言描述开仓方向、条件和止损止盈规则" /></label>
