@@ -24,6 +24,9 @@
 .workflow-parameter-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .workflow-fieldset { margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: 9px; }
 .workflow-fieldset legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
+.workflow-action-rule { padding: 10px; border-color: color-mix(in srgb, #6bdbb2 38%, var(--line)); background: color-mix(in srgb, var(--surface) 42%, transparent); }
+.workflow-action-rule legend { color: var(--text); font-size: 13px; font-weight: 700; }
+.workflow-action-rule textarea { min-height: 64px; }
 .workflow-fieldset .workflow-fieldset { padding: 6px; gap: 6px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .workflow-suffix-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .workflow-suffix-input input { min-width: 0; border: 0; background: transparent; }

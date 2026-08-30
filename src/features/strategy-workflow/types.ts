@@ -102,6 +102,10 @@ export type WorkflowNode = {
     target?: WorkflowPriceTarget
     stop_loss?: WorkflowPriceTarget
     take_profit?: WorkflowPriceTarget
+    entry_mode?: 'market' | 'pending'
+    entry_price_rule?: string
+    stop_loss_rule?: string
+    take_profit_rule?: string
     description?: string
   }
   position?: { x: number; y: number }

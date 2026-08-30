@@ -38,6 +38,7 @@ function validateStage(workflow: CustomStrategyWorkflow, stageName: WorkflowStag
     if ((node.type === 'entry' || node.type === 'vision_extract') && (!handles.has('next') || handles.size !== 1)) issues.push({ stage: stageName, nodeId: node.id, message: `${node.type === 'entry' ? '入口' : '截图信息提取节点'}必须连接一个下一步` })
     if (isCondition(node) && (!handles.has('yes') || !handles.has('no') || handles.size !== 2)) issues.push({ stage: stageName, nodeId: node.id, message: '判断节点必须同时连接“是”和“否”分支' })
     if (node.type === 'action' && handles.size > 0) issues.push({ stage: stageName, nodeId: node.id, message: '动作执行后应结束，不能继续连接节点' })
+    if (node.type === 'action' && ['open_buy', 'open_sell'].includes(node.action?.kind || '') && node.action?.entry_mode === 'pending' && !(node.action.entry_price_rule || '').trim()) issues.push({ stage: stageName, nodeId: node.id, message: '挂单开仓必须填写挂单价格规则' })
     if (node.type === 'condition' && !node.condition) issues.push({ stage: stageName, nodeId: node.id, message: '请选择并配置判断条件' })
     if (node.type === 'vision_extract') {
       if ((node.instruction || '').trim().length < 5) issues.push({ stage: stageName, nodeId: node.id, message: '请完整填写截图识别要求' })
