@@ -1,6 +1,6 @@
 import {
   ArrowLeft, ArrowRight, BarChart3, BookOpen, Bot, BrainCircuit, Check, ChevronRight,
-  Clock3, Layers3, LineChart, LockKeyhole, MonitorSmartphone,
+  Clock3, Crown, Layers3, LineChart, LockKeyhole, MonitorSmartphone,
   RefreshCcw, ShieldCheck, Sparkles, WalletCards,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -97,6 +97,163 @@ export function HomePage() {
   )
 }
 
+export function PricingPage() {
+  const loggedIn = hasSession()
+  return (
+    <div className="subpage pricing-page">
+      <section className="subpage-hero pricing-hero">
+        <div className="public-container">
+          <span>PRICING &amp; SERVICES</span>
+          <h1>简单、清晰的服务价格</h1>
+          <p>会员服务与 GL AI 使用费用分开计算。按实际需要开通，不捆绑不必要的用量。</p>
+        </div>
+      </section>
+
+      <section className="public-section pricing-section">
+        <div className="public-container">
+          <div className="pricing-grid">
+            <article className="pricing-card pricing-card-primary">
+              <div className="pricing-card-head">
+                <div className="pricing-icon"><Crown /></div>
+                <div><span>MEMBERSHIP</span><h2>VIP1 会员</h2></div>
+                <em>推荐</em>
+              </div>
+              <div className="pricing-price"><small>¥</small><strong>3,980</strong><span>/ 年</span></div>
+              <p>适合需要连接 MT4 / MT5，并长期运行 AI 策略的用户。</p>
+              <ul>
+                <li><Check />创建并管理策略 Key</li>
+                <li><Check />使用 GL 策略库与策略配置功能</li>
+                <li><Check />连接 MT4 / MT5 运行策略</li>
+                <li><Check />查看 AI 调用、历史订单及运行统计</li>
+                <li><Check />账户、策略与风险参数管理</li>
+              </ul>
+              <Link className="button button-primary button-large" to={loggedIn ? '/app' : '/register'}>
+                {loggedIn ? '进入用户中心' : '注册并了解开通方式'}<ArrowRight size={17} />
+              </Link>
+            </article>
+
+            <article className="pricing-card">
+              <div className="pricing-card-head">
+                <div className="pricing-icon"><WalletCards /></div>
+                <div><span>GL AI BALANCE</span><h2>GL AI 余额</h2></div>
+              </div>
+              <div className="pricing-price"><small>¥</small><strong>50</strong><span>起充</span></div>
+              <p>使用平台提供的 GL AI 模型时，从预充值余额中按实际 Token 用量扣费。</p>
+              <ul>
+                <li><Check />不同模型按各自输入、输出价格计费</li>
+                <li><Check />调用明细、Token 用量和费用清晰可查</li>
+                <li><Check />余额不足时提供醒目提醒</li>
+                <li><Check />使用自定义 AI Key 时不扣除 GL AI 余额</li>
+                <li><Check />模型收费标准可在用户中心查看</li>
+              </ul>
+              <Link className="button button-outline button-large" to={loggedIn ? '/app/wallet' : '/login'}>
+                {loggedIn ? '查看 GL AI 余额' : '登录后查看'}<ArrowRight size={17} />
+              </Link>
+            </article>
+          </div>
+
+          <div className="pricing-note">
+            <ShieldCheck />
+            <div>
+              <h3>费用说明</h3>
+              <p>VIP1 是平台会员服务费，GL AI 余额用于支付平台模型调用费用，两项费用相互独立。目前采用转账后人工开通会员及充值余额，暂不提供在线支付。</p>
+            </div>
+          </div>
+
+          <div className="pricing-faq-grid">
+            <article><h3>会员是否包含 AI 用量？</h3><p>不包含。模型价格差异较大，AI 调用按实际 Token 用量单独计费，避免固定套餐造成浪费。</p></article>
+            <article><h3>使用自己的 AI Key 还会扣费吗？</h3><p>不会扣除 GL AI 余额。第三方 AI 服务商产生的费用由用户与对应服务商自行结算。</p></article>
+            <article><h3>到期后会发生什么？</h3><p>VIP 到期后不能继续创建和运行策略，但仍可登录用户中心查看已有信息和历史记录。</p></article>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export function CustomStrategyIntroPage() {
+  const loggedIn = hasSession()
+  return (
+    <div className="subpage custom-intro-page">
+      <section className="custom-intro-hero">
+        <div className="public-container custom-intro-hero-grid">
+          <div className="custom-intro-copy">
+            <div className="hero-badge"><Sparkles size={15} />自然语言创建策略</div>
+            <h1>不会编程，也能把交易想法<br />变成可运行的 <em>AI 策略</em></h1>
+            <p>用日常语言写下开仓、平仓和持仓风控规则。GainLab 帮您解析逻辑、准备指标与提示词，并生成可以连接 MT4 / MT5 的策略 Key。</p>
+            <div className="hero-actions">
+              <Link className="button button-primary button-large" to={loggedIn ? '/app/strategies/new' : '/register'}>
+                {loggedIn ? '开始创建策略' : '注册并开始创建'}<ArrowRight size={18} />
+              </Link>
+              <a className="button button-outline button-large" href="#custom-workflow">查看创建流程</a>
+            </div>
+            <div className="hero-trust"><span><Check />无需编写 EA 代码</span><span><Check />支持 MT4 / MT5</span><span><Check />创建前确认解析结果</span></div>
+          </div>
+
+          <div className="custom-intro-demo">
+            <div className="custom-intro-demo-head"><span>策略描述</span><small>NATURAL LANGUAGE</small></div>
+            <div className="custom-rule-block">
+              <strong>开仓规则</strong>
+              <p>最近 3 根已收盘 K 线中，如果 EMA5 上穿 EMA30 做多，下破 EMA30 做空。</p>
+            </div>
+            <div className="custom-rule-block">
+              <strong>持仓风控</strong>
+              <p>盈利达到 0.5 ATR 后移动到保本；价格继续运行时，按 ATR 距离移动止损。</p>
+            </div>
+            <div className="custom-parse-flow">
+              <span>自然语言</span><ChevronRight /><span>规则解析</span><ChevronRight /><span>AI 决策</span><ChevronRight /><span>MT 执行</span>
+            </div>
+            <div className="custom-parse-result"><span className="signal-dot" /><div><small>系统已识别</small><strong>EMA · ATR · 交叉条件 · 移动止损</strong></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section muted-section">
+        <div className="public-container">
+          <div className="section-heading centered"><span>NO-CODE STRATEGY</span><h2>您负责交易想法，系统负责技术实现</h2><p>无需学习编程语法，也不用自己处理接口、指标计算和 AI 请求格式。</p></div>
+          <div className="custom-benefit-grid">
+            <article><div className="feature-icon"><BookOpen /></div><h3>自然语言描述规则</h3><p>像写交易笔记一样，分别描述什么时候开仓，以及持仓后什么时候平仓、加仓或调整止损。</p></article>
+            <article><div className="feature-icon"><BrainCircuit /></div><h3>AI 解析并等待确认</h3><p>保存前分析交易条件、所需指标和数据要求，将系统理解的完整结果展示给您确认。</p></article>
+            <article><div className="feature-icon"><Layers3 /></div><h3>自动准备指标数据</h3><p>根据策略需要计算 EMA、ATR、RSI、MACD 等常用指标，并将行情数据组合成分析上下文。</p></article>
+            <article><div className="feature-icon"><MonitorSmartphone /></div><h3>一个 Key 连接 EA</h3><p>策略创建完成后自动生成 Key，填入 GainLab EA，即可连接 MT4 / MT5 持续运行。</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section" id="custom-workflow">
+        <div className="public-container">
+          <div className="section-heading"><span>HOW IT WORKS</span><h2>从一句策略想法，到 EA 自动执行</h2><p>创建时完成规则解析，运行时由服务端准备数据并调用您选择的 AI 模型。</p></div>
+          <div className="custom-workflow-grid">
+            <article><span>01</span><h3>写下交易规则</h3><p>填写开仓逻辑、持仓风控，以及需要 EA 提供 K 线、截图或两者同时提供。</p></article>
+            <article><span>02</span><h3>确认解析结果</h3><p>查看系统生成的开仓与风控模板、指标列表和未精确识别的条件，确认后再保存。</p></article>
+            <article><span>03</span><h3>选择 AI 并生成 Key</h3><p>选择 GL 提供 AI 或配置自己的 AI Key，设置仓位算法和绑定的交易账号。</p></article>
+            <article><span>04</span><h3>连接 EA 开始运行</h3><p>EA 按策略要求提交行情，服务端计算指标、请求 AI，并返回结构化操作指令。</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section custom-capability-section">
+        <div className="public-container custom-capability-grid">
+          <div>
+            <span className="section-kicker">FLEXIBLE INPUT</span>
+            <h2>不只支持简单的指标交叉</h2>
+            <p>策略可以综合常用技术指标、K 线数据和图表截图。无论是趋势、形态还是图形信号，都可以按您的表达交给 AI 分析。</p>
+            <ul><li><Check />常用技术指标及自定义参数</li><li><Check />K 线形态、价格结构与连续条件</li><li><Check />图表截图和自定义视觉指标</li><li><Check />开仓、平仓、加仓、部分平仓与止损修改</li></ul>
+          </div>
+          <aside>
+            <ShieldCheck />
+            <h3>策略逻辑由您定义</h3>
+            <p>GainLab 的职责是准确传递数据、解析规则并执行策略，不会擅自添加您没有描述的交易条件。</p>
+            <p>自然语言越清晰，AI 理解越稳定。正式运行前，建议先使用模拟账户观察和验证。</p>
+          </aside>
+        </div>
+      </section>
+
+      <section className="cta-section"><div className="public-container cta-inner"><div><span>TURN IDEAS INTO STRATEGIES</span><h2>把您的下一条交易规则写下来</h2><p>不必从学习编程开始，先从说清楚自己的交易逻辑开始。</p></div><Link className="button button-light button-large" to={loggedIn ? '/app/strategies/new' : '/register'}>{loggedIn ? '创建自定义策略' : '免费注册'}<ArrowRight size={18} /></Link></div></section>
+    </div>
+  )
+}
+
 export function OfficialStrategiesPage() {
   return (
     <div className="subpage">
@@ -125,7 +282,7 @@ export function GuidePage() {
   }, [])
   return (
     <div className="subpage">
-      <section className="subpage-hero"><div className="public-container"><span>QUICK START</span><h1>接入指南</h1><p>查看 MT4 / MT5、EA 安装、策略配置与常见问题教程。</p></div></section>
+      <section className="subpage-hero"><div className="public-container"><span>QUICK START</span><h1>使用指南</h1><p>查看 MT4 / MT5、EA 安装、策略配置与常见问题教程。</p></div></section>
       <section className="public-section"><div className="public-container guide-layout">
         <div className="guide-article-list">
           {loading ? <div className="guide-list-state">正在加载教程...</div> : error ? <div className="guide-list-state is-error">{error}</div> : guides.length ? guides.map((guide, index) => (

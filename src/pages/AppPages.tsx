@@ -946,7 +946,7 @@ export function EaDownloadsPage() {
     return `${(value / 1024 / 1024).toFixed(1)} MB`
   }
   return <>
-    <PageHeading eyebrow="EA DOWNLOADS" title="EA 下载" description="下载 GainLab 提供的 MT4/MT5 EA，并按照接入指南完成安装和策略 Key 配置。" />
+    <PageHeading eyebrow="EA DOWNLOADS" title="EA 下载" description="下载 GainLab 提供的 MT4/MT5 EA，并按照使用指南完成安装和策略 Key 配置。" />
     {loading ? <div className="permission-loading">正在加载 EA 下载列表...</div> : error ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>加载失败</strong><span>{error}</span></div></div> : items.length ? <div className="ea-download-list">{items.map((item) => <article className="panel ea-download-card" key={item.id}><div className="ea-download-icon"><Download /></div><div><h2>{item.name}</h2><p>{item.description || 'GainLab MT4/MT5 EA 安装文件。'}</p><small>{item.file_name || 'EA 安装包'}{fileSize(item.file_size) ? ` · ${fileSize(item.file_size)}` : ''}</small></div><a className="button button-primary" href={secureDownloadUrl(item.oss_url)} download={item.file_name || true}><Download size={17} />立即下载</a></article>)}</div> : <EmptyState icon={<Download />} title="暂无 EA 下载" description="管理员发布 EA 文件后会显示在这里。" />}
   </>
 }

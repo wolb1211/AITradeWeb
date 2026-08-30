@@ -9,7 +9,9 @@ import { apiRequest, authUserDisplayName, clearSession, getStoredUser, hasSessio
 const links = [
   { to: '/', label: '首页', end: true },
   ...(SHOW_OFFICIAL_STRATEGIES ? [{ to: '/official-strategies', label: '官方策略' }] : []),
-  { to: '/guide', label: '接入指南' },
+  { to: '/custom-strategy', label: 'AI写策略' },
+  { to: '/pricing', label: '价格与服务' },
+  { to: '/guide', label: '使用指南' },
 ]
 
 export function PublicLayout() {
@@ -57,7 +59,7 @@ export function PublicLayout() {
             <Brand />
             <p>为 MT4/MT5 提供可配置、可追踪的 AI 策略分析与交易决策服务。</p>
           </div>
-          <div><strong>产品</strong>{SHOW_OFFICIAL_STRATEGIES && <Link to="/official-strategies">官方策略</Link>}<Link to="/guide">接入指南</Link></div>
+          <div><strong>产品</strong>{SHOW_OFFICIAL_STRATEGIES && <Link to="/official-strategies">官方策略</Link>}<Link to="/custom-strategy">AI写策略</Link><Link to="/pricing">价格与服务</Link><Link to="/guide">使用指南</Link></div>
           <div><strong>账户</strong>{loggedIn ? <Link to="/app">用户中心</Link> : <><Link to="/login">登录</Link><Link to="/register">注册</Link></>}</div>
           <div><strong>协议</strong><Link to="/terms">服务条款</Link><Link to="/privacy">隐私政策</Link></div>
         </div>

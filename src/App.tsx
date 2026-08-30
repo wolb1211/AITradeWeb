@@ -9,7 +9,7 @@ import {
   AgentCenterPage, DashboardPage, EaDownloadsPage, OrdersPage, ProfilePage, SecurityPage, StrategiesPage,
   StrategyCreatePage, StrategyDetailPage, UsagePage, WalletPage,
 } from './pages/AppPages'
-import { GuideDetailPage, GuidePage, HomePage, LegalPage, OfficialStrategiesPage } from './pages/PublicPages'
+import { CustomStrategyIntroPage, GuideDetailPage, GuidePage, HomePage, LegalPage, OfficialStrategiesPage, PricingPage } from './pages/PublicPages'
 
 export default function App() {
   return (
@@ -17,6 +17,8 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         {SHOW_OFFICIAL_STRATEGIES && <Route path="/official-strategies" element={<OfficialStrategiesPage />} />}
+        <Route path="/custom-strategy" element={<CustomStrategyIntroPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/guide" element={<GuidePage />} />
         <Route path="/guide/:id" element={<GuideDetailPage />} />
         <Route path="/terms" element={<LegalPage type="terms" />} />

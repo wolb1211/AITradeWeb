@@ -94,8 +94,8 @@ export function AppLayout() {
         </nav>
         <div className="sidebar-help">
           <BookOpen size={19} />
-          <div><strong>MT 接入指南</strong><small>查看 EA 配置步骤</small></div>
-          <Link to="/guide" aria-label="打开接入指南" />
+          <div><strong>使用指南</strong><small>查看 EA 配置步骤</small></div>
+          <Link to="/guide" aria-label="打开使用指南" />
         </div>
         <button className="collapse-button" type="button" onClick={() => setCollapsed((value) => !value)}>
           <ChevronLeft size={17} /><span>收起菜单</span>
