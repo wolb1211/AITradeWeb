@@ -16,6 +16,9 @@
 .workflow-config-panel small, .workflow-config-panel span { color: var(--muted); font-size: 11px; }
 .workflow-config-panel label { display: flex; flex-direction: column; gap: 4px; }
 .workflow-config-panel input, .workflow-config-panel textarea, .workflow-config-panel select { width: 100%; min-height: 34px; padding: 6px 9px; color: var(--text); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; font-size: 12px; line-height: 1.45; resize: vertical; }
+.workflow-config-panel textarea { border-color: color-mix(in srgb, var(--text) 24%, var(--line)); background: color-mix(in srgb, var(--surface) 88%, var(--panel)); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 2%); }
+.workflow-config-panel textarea:hover { border-color: color-mix(in srgb, #6bdbb2 45%, var(--line)); }
+.workflow-config-panel textarea:focus { border-color: #49c99a; outline: 0; box-shadow: 0 0 0 2px rgb(73 201 154 / 15%); }
 .workflow-config-panel .workflow-mantine-select { width: 100%; }
 .workflow-config-panel .workflow-mantine-select .mantine-Select-input { min-height: 34px; height: 34px; padding: 6px 30px 6px 9px; color: var(--text); border-color: var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; }
 .workflow-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -26,7 +29,7 @@
 .workflow-fieldset legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
 .workflow-action-rule { padding: 10px; border-color: color-mix(in srgb, #6bdbb2 38%, var(--line)); background: color-mix(in srgb, var(--surface) 42%, transparent); }
 .workflow-action-rule legend { color: var(--text); font-size: 13px; font-weight: 700; }
-.workflow-action-rule textarea { min-height: 64px; }
+.workflow-action-rule textarea { min-height: 64px; border-color: color-mix(in srgb, #6bdbb2 38%, var(--line)); }
 .workflow-fieldset .workflow-fieldset { padding: 6px; gap: 6px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .workflow-suffix-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .workflow-suffix-input input { min-width: 0; border: 0; background: transparent; }
