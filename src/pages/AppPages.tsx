@@ -13,8 +13,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EmptyState, PageHeading, StatCard, StatusPill, TextLink } from '../components/Ui'
 import type { PnlCurvePoint } from '../components/PnlChart'
 import { ApiError, apiRequest, authUserDisplayName, authUserVipDetail, authUserVipLabel, clearSession, getStoredUser, post, saveStoredUser, type AuthUser } from '../lib/api'
+import { createDefaultWorkflow } from '../features/strategy-workflow/defaults'
 
 const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({ default: module.PnlChart })))
+const WorkflowEditor = lazy(() => import('../features/strategy-workflow/WorkflowEditor').then((module) => ({ default: module.WorkflowEditor })))
 
 type PortalStrategy = {
   id: string; deployment_key: string; name: string; status: string; strategy_code: string; mt_login: string; summary: string
@@ -801,6 +803,22 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
 }
 
 export function StrategyCreatePage() { return <><PageHeading eyebrow="NEW DEPLOYMENT" title="创建策略" description="完成配置后，系统将生成用于 MT4/MT5 的唯一部署 Key。" /><StrategyForm /></> }
+
+export function WorkflowPrototypePage() {
+  const [workflow, setWorkflow] = useState(createDefaultWorkflow)
+  const [aiOpened, setAiOpened] = useState(false)
+  return <>
+    <PageHeading eyebrow="VISUAL STRATEGY" title="可视化策略编辑器" description="通过条件分支搭建开仓与持仓风控逻辑；当前页面用于确认第一版编辑体验。" />
+    <Suspense fallback={<div className="panel loading-block"><Loader color="teal" size="md" />正在加载流程编辑器...</div>}><WorkflowEditor value={workflow} onChange={setWorkflow} onGenerateWithAi={() => setAiOpened(true)} /></Suspense>
+    <Modal opened={aiOpened} onClose={() => setAiOpened(false)} title="AI帮我生成流程" centered size="xl">
+      <div className="custom-rule-grid">
+        <label><span>开仓逻辑</span><textarea rows={8} placeholder="请用自然语言描述开仓方向、条件和止损止盈规则" /></label>
+        <label><span>持仓风控逻辑</span><textarea rows={8} placeholder="请描述平仓、加仓、部分平仓和修改止损止盈规则" /></label>
+      </div>
+      <div className="custom-preview-actions"><button className="button button-secondary" type="button" onClick={() => setAiOpened(false)}>取消</button><button className="button button-primary" type="button" disabled><Sparkles size={16} />生成流程草稿（下一阶段接入）</button></div>
+    </Modal>
+  </>
+}
 
 export function StrategyDetailPage() {
   const { id } = useParams()

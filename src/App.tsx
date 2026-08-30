@@ -7,7 +7,7 @@ import { SHOW_OFFICIAL_STRATEGIES } from './config/features'
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from './pages/AuthPages'
 import {
   AgentCenterPage, DashboardPage, EaDownloadsPage, OrdersPage, ProfilePage, SecurityPage, StrategiesPage,
-  StrategyCreatePage, StrategyDetailPage, UsagePage, WalletPage,
+  StrategyCreatePage, StrategyDetailPage, UsagePage, WalletPage, WorkflowPrototypePage,
 } from './pages/AppPages'
 import { CustomStrategyIntroPage, GuideDetailPage, GuidePage, HomePage, LegalPage, OfficialStrategiesPage, PricingPage } from './pages/PublicPages'
 
@@ -32,6 +32,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="strategies" element={<StrategiesPage />} />
         <Route path="strategies/new" element={<RequireVip><StrategyCreatePage /></RequireVip>} />
+        <Route path="strategies/workflow-prototype" element={<RequireVip><WorkflowPrototypePage /></RequireVip>} />
         <Route path="strategies/:id" element={<StrategyDetailPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="wallet" element={<WalletPage />} />
