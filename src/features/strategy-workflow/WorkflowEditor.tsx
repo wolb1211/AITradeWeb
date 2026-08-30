@@ -130,19 +130,14 @@ function enforceBranchSides(stage: WorkflowStage, positions: Map<string, { x: nu
         shiftExclusive(noTree, yesTree, shift)
       }
       if (parentPosition) {
-        // Node width is 220px. Yes/no handles sit at 25%/75%; keeping each
-        // child at least 90px away from the parent's left coordinate makes
-        // the green branch visibly leave to the left and the red branch to
-        // the right before turning downward.
-        const branchOffset = 90
+        // Keep both child roots at the same distance from their parent. With
+        // 220px cards, 140px on each side leaves a visible gap between sibling
+        // cards and produces mirrored left/right connectors.
+        const branchOffset = 140
         const adjustedYes = positions.get(yesId)
         const adjustedNo = positions.get(noId)
-        if (adjustedYes && adjustedYes.x > parentPosition.x - branchOffset) {
-          shiftExclusive(yesTree, noTree, parentPosition.x - branchOffset - adjustedYes.x)
-        }
-        if (adjustedNo && adjustedNo.x < parentPosition.x + branchOffset) {
-          shiftExclusive(noTree, yesTree, parentPosition.x + branchOffset - adjustedNo.x)
-        }
+        if (adjustedYes) shiftExclusive(yesTree, noTree, parentPosition.x - branchOffset - adjustedYes.x)
+        if (adjustedNo) shiftExclusive(noTree, yesTree, parentPosition.x + branchOffset - adjustedNo.x)
       }
     }
     branches?.forEach((target) => queue.push(target))
@@ -188,9 +183,9 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
     pathOptions: {
       borderRadius: 10,
       offset: 18,
-      // Put yes/no branches on separate routing lanes so their horizontal
-      // sections never overlap when they point at sibling subtrees.
-      stepPosition: edge.source_handle === 'yes' ? 0.32 : edge.source_handle === 'no' ? 0.68 : 0.5,
+      // Child subtrees are laid out symmetrically, so both branches use the
+      // same turn depth and form mirrored connectors.
+      stepPosition: 0.5,
     },
     markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
     style: {
