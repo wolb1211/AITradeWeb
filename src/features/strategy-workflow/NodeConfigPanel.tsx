@@ -108,65 +108,71 @@ const fallbackIndicatorCatalog: IndicatorCatalogItem[] = [
 
 function indicatorOutput(catalog: IndicatorCatalogItem[], value?: WorkflowOperand): IndicatorCatalogOutput | undefined {
   const definition = catalog.find((item) => item.name === value?.indicator)
-  return definition?.outputs.find((item) => item.component === (value?.component || 'value')) || definition?.outputs[0]
+  const outputs = Array.isArray(definition?.outputs) ? definition.outputs : []
+  return outputs.find((item) => item.component === (value?.component || 'value')) || outputs[0]
 }
 
 function compatibleOperand(output: IndicatorCatalogOutput | undefined, current: WorkflowOperand | undefined, catalog: IndicatorCatalogItem[], conditionKind: string): WorkflowOperand {
   if (!output) return current || defaultOperand('indicator')
-  if (current && output.right_operand_kinds.includes(current.kind)) {
-    if (current.kind !== 'indicator' || output.compatible_groups.includes(indicatorOutput(catalog, current)?.comparison_group || '')) return current
+  const rightOperandKinds = Array.isArray(output.right_operand_kinds) ? output.right_operand_kinds : []
+  const compatibleGroups = Array.isArray(output.compatible_groups) ? output.compatible_groups : []
+  if (current && rightOperandKinds.includes(current.kind)) {
+    if (current.kind !== 'indicator' || compatibleGroups.includes(indicatorOutput(catalog, current)?.comparison_group || '')) return current
   }
-  if (output.right_operand_kinds.includes('indicator')) {
-    const definition = catalog.find((item) => item.outputs.some((itemOutput) => output.compatible_groups.includes(itemOutput.comparison_group) && itemOutput.condition_kinds.includes(conditionKind)))
-    const selected = definition?.outputs.find((item) => output.compatible_groups.includes(item.comparison_group) && item.condition_kinds.includes(conditionKind))
+  if (rightOperandKinds.includes('indicator')) {
+    const definition = catalog.find((item) => (item.outputs || []).some((itemOutput) => compatibleGroups.includes(itemOutput.comparison_group) && (itemOutput.condition_kinds || []).includes(conditionKind)))
+    const selected = (definition?.outputs || []).find((item) => compatibleGroups.includes(item.comparison_group) && (item.condition_kinds || []).includes(conditionKind))
     if (definition && selected) {
-      const operand: WorkflowOperand = { kind: 'indicator', indicator: definition.name, component: selected.component, params: { ...definition.default_params }, source: definition.sources[0]?.value || 'ohlc', offset: -1 }
+      const operand: WorkflowOperand = { kind: 'indicator', indicator: definition.name, component: selected.component, params: { ...(definition.default_params || {}) }, source: definition.sources?.[0]?.value || 'ohlc', offset: -1 }
       return { ...operand, alias: indicatorAlias(operand) }
     }
   }
-  if (output.right_operand_kinds.includes('market_price')) return defaultOperand('market_price')
-  if (output.right_operand_kinds.includes('candle')) return defaultOperand('candle')
+  if (rightOperandKinds.includes('market_price')) return defaultOperand('market_price')
+  if (rightOperandKinds.includes('candle')) return defaultOperand('candle')
   return { kind: 'constant', value: output.default_constant ?? 0 }
 }
 
 function IndicatorFields({ value, onChange, title, catalog, compatibleGroups, conditionKind }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string; catalog: IndicatorCatalogItem[]; compatibleGroups?: string[]; conditionKind?: string }) {
-  const sourceCatalog = catalog.length ? catalog : fallbackIndicatorCatalog
-  const availableCatalog = sourceCatalog.filter((item) => item.outputs.some((output) => (
+  const validCatalog = catalog.filter((item) => Array.isArray(item.outputs) && item.outputs.length > 0)
+  const sourceCatalog = validCatalog.length ? validCatalog : fallbackIndicatorCatalog
+  const availableCatalog = sourceCatalog.filter((item) => (item.outputs || []).some((output) => (
     (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
-    (!conditionKind || output.condition_kinds.includes(conditionKind))
+    (!conditionKind || (output.condition_kinds || []).includes(conditionKind))
   )))
+  const selectableCatalog = availableCatalog.length ? availableCatalog : sourceCatalog
   const indicator = value.indicator || 'ema'
   const params = value.params || {}
-  const definition = availableCatalog.find((item) => item.name === indicator) || availableCatalog[0] || sourceCatalog[0]
-  const outputs = definition.outputs.filter((output) => (
+  const definition = selectableCatalog.find((item) => item.name === indicator) || selectableCatalog[0] || fallbackIndicatorCatalog[0]
+  const outputs = (definition.outputs || []).filter((output) => (
     (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
-    (!conditionKind || output.condition_kinds.includes(conditionKind))
+    (!conditionKind || (output.condition_kinds || []).includes(conditionKind))
   ))
-  const selectedOutput = outputs.find((item) => item.component === (value.component || 'value')) || outputs[0]
+  const selectableOutputs = outputs.length ? outputs : (definition.outputs || [])
+  const selectedOutput = selectableOutputs.find((item) => item.component === (value.component || 'value')) || selectableOutputs[0]
   const update = (updates: Partial<WorkflowOperand>) => {
     const next = { ...value, ...updates }
     onChange({ ...next, alias: indicatorAlias(next) })
   }
   const selectIndicator = (nextIndicator: string) => {
-    const nextDefinition = availableCatalog.find((item) => item.name === nextIndicator) || sourceCatalog[0]
-    const nextOutputs = nextDefinition.outputs.filter((output) => (
+    const nextDefinition = selectableCatalog.find((item) => item.name === nextIndicator) || selectableCatalog[0] || fallbackIndicatorCatalog[0]
+    const nextOutputs = (nextDefinition.outputs || []).filter((output) => (
       (!compatibleGroups?.length || compatibleGroups.includes(output.comparison_group)) &&
-      (!conditionKind || output.condition_kinds.includes(conditionKind))
+      (!conditionKind || (output.condition_kinds || []).includes(conditionKind))
     ))
     const next: WorkflowOperand = {
       ...value,
       indicator: nextIndicator,
-      params: { ...nextDefinition.default_params },
-      source: nextDefinition.sources[0]?.value || 'ohlc',
+      params: { ...(nextDefinition.default_params || {}) },
+      source: nextDefinition.sources?.[0]?.value || 'ohlc',
       component: nextOutputs[0]?.component || 'value',
     }
     onChange({ ...next, alias: indicatorAlias(next) })
   }
   return <fieldset className="workflow-fieldset"><legend>{title}</legend>
-    <label><span>指标</span><FormSelect value={definition.name} onChange={selectIndicator} data={availableCatalog.map((item) => [item.name, item.title])} /></label>
-    {definition.parameters.length > 0 && <div className={`workflow-parameter-grid${definition.parameters.length >= 3 ? ' three' : ''}`}>{definition.parameters.map((parameter) => <label key={parameter.name}><span>{parameter.label}</span><input type="number" min="0.000001" step={Number.isInteger(parameter.default) ? 1 : 0.1} value={Number(params[parameter.name] ?? parameter.default)} onChange={(event) => update({ params: { ...params, [parameter.name]: Number(event.target.value) } })} /></label>)}</div>}
-    {outputs.length > 1 && <label><span>指标值</span><FormSelect value={selectedOutput.component} onChange={(component) => update({ component })} data={outputs.map((output) => [output.component, output.title])} /></label>}
-    <div className="workflow-field-row">{definition.sources.length > 0 && <label><span>价格源</span><FormSelect value={value.source || definition.sources[0].value} onChange={(source) => update({ source })} data={definition.sources.map((source) => [source.value, source.label])} /></label>}<label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => update({ offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
+    <label><span>指标</span><FormSelect value={definition.name} onChange={selectIndicator} data={selectableCatalog.map((item) => [item.name, item.title])} /></label>
+    {(definition.parameters || []).length > 0 && <div className={`workflow-parameter-grid${(definition.parameters || []).length >= 3 ? ' three' : ''}`}>{(definition.parameters || []).map((parameter) => <label key={parameter.name}><span>{parameter.label}</span><input type="number" min="0.000001" step={Number.isInteger(parameter.default) ? 1 : 0.1} value={Number(params[parameter.name] ?? parameter.default)} onChange={(event) => update({ params: { ...params, [parameter.name]: Number(event.target.value) } })} /></label>)}</div>}
+    {selectableOutputs.length > 1 && selectedOutput && <label><span>指标值</span><FormSelect value={selectedOutput.component} onChange={(component) => update({ component })} data={selectableOutputs.map((output) => [output.component, output.title])} /></label>}
+    <div className="workflow-field-row">{(definition.sources || []).length > 0 && <label><span>价格源</span><FormSelect value={value.source || definition.sources[0].value} onChange={(source) => update({ source })} data={definition.sources.map((source) => [source.value, source.label])} /></label>}<label><span>K线</span><FormSelect value={String(value.offset ?? -1)} onChange={(offset) => update({ offset: Number(offset) })} data={[["-1", '最新已收盘'], ["-2", '前一根'], ["-3", '前两根']]} /></label></div>
   </fieldset>
 }
 
