@@ -25,6 +25,7 @@ import './workflow-editor.css'
 
 type EditorNodeData = {
   workflowNode: WorkflowNode
+  stageNodes: WorkflowNode[]
   dataRequirements: WorkflowDataRequirements
   selected: boolean
   onSelect: (id: string) => void
@@ -46,23 +47,24 @@ function nodeClass(type: WorkflowNode['type']) {
 function nodeIcon(type: WorkflowNode['type']) {
   if (type === 'entry') return <Play size={16} />
   if (type === 'condition') return <GitBranch size={16} />
-  if (type === 'vision_condition') return <Image size={16} />
+  if (type === 'vision_extract') return <Image size={16} />
   if (type === 'ai_condition') return <Bot size={16} />
   return <ShieldCheck size={16} />
 }
 
 function StrategyNode({ data }: NodeProps<FlowNode<EditorNodeData>>) {
   const node = data.workflowNode
-  const displayLabel = describeWorkflowNode(node)
-  const condition = node.type === 'condition' || node.type === 'vision_condition' || node.type === 'ai_condition'
+  const displayLabel = describeWorkflowNode(node, data.stageNodes)
+  const condition = node.type === 'condition' || node.type === 'ai_condition'
+  const sequential = node.type === 'entry' || node.type === 'vision_extract'
   return <div className={`${nodeClass(node.type)}${data.selected ? ' selected' : ''}`} onClick={() => data.onSelect(node.id)}>
     {node.type !== 'entry' && <Handle type="target" position={Position.Top} isConnectable={false} />}
-    <div className="workflow-node-head">{nodeIcon(node.type)}<span>{node.type === 'entry' ? '数据入口' : condition ? '判断条件' : '执行动作'}</span></div>
+    <div className="workflow-node-head">{nodeIcon(node.type)}<span>{node.type === 'entry' ? '数据入口' : node.type === 'vision_extract' ? '截图信息提取' : condition ? '判断条件' : '执行动作'}</span></div>
     <strong>{displayLabel}</strong>
     {node.type === 'entry' && <small className="workflow-entry-summary">{describeEntryData(data.dataRequirements)}</small>}
-    {node.type === 'vision_condition' && <small>AI截图识别</small>}
+    {node.type === 'vision_extract' && <small>{node.output?.options.map((item) => item.label).join(' / ') || '固定枚举输出'}</small>}
     {node.type === 'ai_condition' && <small>开放语义判断</small>}
-    {node.type === 'entry' && <>
+    {sequential && <>
       <Handle id="next" type="source" position={Position.Bottom} isConnectable={false} />
       <button className="workflow-add-button single" type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'next') }} aria-label="添加下一步"><Plus size={14} /></button>
     </>}
@@ -85,7 +87,7 @@ async function layoutStage(workflow: CustomStrategyWorkflow, stageName: Workflow
       'elk.spacing.nodeNode': '46',
       'elk.layered.spacing.nodeNodeBetweenLayers': '72',
     },
-    children: stage.nodes.map((node) => ({ id: node.id, width: 220, height: node.type === 'condition' || node.type.includes('condition') ? 132 : node.type === 'entry' ? 104 : 88 })),
+    children: stage.nodes.map((node) => ({ id: node.id, width: 220, height: node.type === 'condition' || node.type.includes('condition') ? 132 : node.type === 'entry' || node.type === 'vision_extract' ? 104 : 88 })),
     edges: stage.edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   })
   const positions = new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
@@ -154,6 +156,40 @@ function enforceBranchSides(stage: WorkflowStage, positions: Map<string, { x: nu
   }
 }
 
+function upstreamVisionNodes(stage: WorkflowStage, targetId: string) {
+  const incoming = new Map<string, string[]>()
+  stage.edges.forEach((edge) => incoming.set(edge.target, [...(incoming.get(edge.target) || []), edge.source]))
+  const upstream = new Set<string>()
+  const queue = [...(incoming.get(targetId) || [])]
+  while (queue.length) {
+    const id = queue.shift()!
+    if (upstream.has(id)) continue
+    upstream.add(id)
+    queue.push(...(incoming.get(id) || []))
+  }
+  const canReachTargetWithout = (blockedId: string) => {
+    const visited = new Set<string>()
+    const queue = stage.entry_node_id === blockedId ? [] : [stage.entry_node_id]
+    while (queue.length) {
+      const id = queue.shift()!
+      if (id === blockedId || visited.has(id)) continue
+      if (id === targetId) return true
+      visited.add(id)
+      stage.edges.filter((edge) => edge.source === id && edge.target !== blockedId).forEach((edge) => queue.push(edge.target))
+    }
+    return false
+  }
+  return stage.nodes.filter((node) => upstream.has(node.id) && node.type === 'vision_extract' && !canReachTargetWithout(node.id))
+}
+
+function conditionReferencesVision(node: WorkflowNode, sourceId: string): boolean {
+  if (node.type !== 'condition' || !node.condition) return false
+  const visit = (condition: NonNullable<WorkflowNode['condition']>): boolean => (
+    condition.left?.kind === 'vision_result' && condition.left.source_node_id === sourceId
+  ) || (condition.conditions || []).some(visit)
+  return visit(node.condition)
+}
+
 function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
   value: CustomStrategyWorkflow
   stageName: WorkflowStageName
@@ -181,7 +217,7 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
     id: node.id,
     type: 'strategy',
     position: positions.get(node.id) || node.position || { x: 0, y: 0 },
-    data: { workflowNode: node, dataRequirements: value[stageName].data_requirements, selected: selectedId === node.id, onSelect, onAdd },
+    data: { workflowNode: node, stageNodes: value[stageName].nodes, dataRequirements: value[stageName].data_requirements, selected: selectedId === node.id, onSelect, onAdd },
     draggable: true,
   })), [onAdd, onSelect, positions, selectedId, stageName, value])
   const edges = useMemo<FlowEdge[]>(() => value[stageName].edges.map((edge) => ({
@@ -220,14 +256,16 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
   const [addTarget, setAddTarget] = useState<{ source: string; branch: 'next' | 'yes' | 'no' } | null>(null)
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[] | null>(null)
   const selected = value[stageName].nodes.find((node) => node.id === selectedId)
+  const availableVisionNodes = selected ? upstreamVisionNodes(value[stageName], selected.id) : []
   useEffect(() => { setSelectedId(value[stageName].entry_node_id) }, [stageName])
   const updateSelected = useCallback((nextNode: WorkflowNode) => {
-    const normalizedNode = { ...nextNode, label: describeWorkflowNode(nextNode) }
+    const stageNodes = value[stageName].nodes.map((node) => node.id === selectedId ? nextNode : node)
+    const normalizedNode = { ...nextNode, label: describeWorkflowNode(nextNode, stageNodes) }
     onChange({
       ...value,
       [stageName]: {
         ...value[stageName],
-        nodes: value[stageName].nodes.map((node) => node.id === selectedId ? normalizedNode : node),
+        nodes: stageNodes.map((node) => node.id === selectedId ? normalizedNode : node),
       },
     })
   }, [onChange, selectedId, stageName, value])
@@ -237,6 +275,10 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
   const deleteSelected = useCallback(() => {
     if (!selected || selected.type === 'entry') return
     const stage = value[stageName]
+    if (selected.type === 'vision_extract' && stage.nodes.some((node) => conditionReferencesVision(node, selected.id))) {
+      window.alert('该截图输出已被后续判断条件使用，请先删除或修改相关判断。')
+      return
+    }
     if (selected.type === 'action') {
       const nextStage = pruneWorkflowStage({
         ...stage,
@@ -260,7 +302,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     setSelectedId(stage.entry_node_id)
   }, [onChange, selected, stageName, value])
   const addNext = useCallback((source: string, branch: 'next' | 'yes' | 'no') => setAddTarget({ source, branch }), [])
-  const insertNode = useCallback((type: 'condition' | 'vision_condition' | 'ai_condition' | 'action') => {
+  const insertNode = useCallback((type: 'condition' | 'vision_extract' | 'ai_condition' | 'action') => {
     if (!addTarget) return
     const stage = value[stageName]
     const currentEdge = stage.edges.find((edge) => edge.source === addTarget.source && edge.source_handle === addTarget.branch)
@@ -269,9 +311,17 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     if (type === 'condition') node = {
       id, type, label: '请选择条件',
     }
-    else if (type === 'vision_condition') node = {
-      id, type, label: '截图识别规则', instruction: '请描述需要从最新截图中识别的信号',
-      expected_result: 'matched', result_options: ['matched', 'not_matched'], lookback: 3, minimum_confidence: 0,
+    else if (type === 'vision_extract') node = {
+      id, type, label: '截图提取：截图识别结果', instruction: '请描述需要从EA图表截图中识别的内容，以及每种结果的明确特征',
+      output: {
+        key: `vision_${Date.now().toString(36)}`, label: '截图识别结果', type: 'enum',
+        options: [
+          { value: 'long', label: '多头信号' }, { value: 'short', label: '空头信号' },
+          { value: 'none', label: '无信号' }, { value: 'uncertain', label: '无法确认' },
+        ],
+        fallback: 'uncertain',
+      },
+      lookback: 3, minimum_confidence: 0,
     }
     else if (type === 'ai_condition') node = {
       id, type, label: 'AI判断规则', instruction: '请描述需要AI判断的开放条件', data_type: 'kline',
@@ -287,6 +337,8 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     if (type === 'action') {
       // The action ends this branch. Any old subtree that is no longer used
       // by another branch is removed by pruneWorkflowStage below.
+    } else if (currentEdge && type === 'vision_extract') {
+      edges = [...edges, { id: `${id}_next`, source: id, target: currentEdge.target, source_handle: 'next' }]
     } else if (currentEdge) {
       edges = [...edges,
         { id: `${id}_yes`, source: id, target: currentEdge.target, source_handle: 'yes' },
@@ -308,12 +360,12 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     </div>
     <div className="workflow-editor-body">
       <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} /></ReactFlowProvider></div>
-      <NodeConfigPanel node={selected} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />
+      <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />
     </div>
     {addTarget && <div className="workflow-add-menu" role="dialog" aria-label="添加流程节点">
       <div><strong>添加下一步</strong><button type="button" onClick={() => setAddTarget(null)}><X size={16} /></button></div>
       <button type="button" onClick={() => insertNode('condition')}><GitBranch size={17} /><span><strong>判断条件</strong><small>指标、价格、K线或持仓数据</small></span></button>
-      <button type="button" onClick={() => insertNode('vision_condition')}><Image size={17} /><span><strong>截图识别规则</strong><small>识别图表中的自定义视觉信号</small></span></button>
+      <button type="button" onClick={() => insertNode('vision_extract')}><Image size={17} /><span><strong>截图信息提取</strong><small>从EA图表截图输出固定枚举结果</small></span></button>
       <button type="button" onClick={() => insertNode('ai_condition')}><Bot size={17} /><span><strong>AI判断规则</strong><small>处理暂时无法结构化的开放条件</small></span></button>
       <button type="button" onClick={() => insertNode('action')}><ShieldCheck size={17} /><span><strong>执行动作</strong><small>设置开仓、平仓或修改止损</small></span></button>
     </div>}

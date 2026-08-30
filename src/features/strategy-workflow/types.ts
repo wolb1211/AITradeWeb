@@ -9,7 +9,7 @@ export type WorkflowDataRequirements = {
 }
 
 export type WorkflowOperand = {
-  kind: 'indicator' | 'market_price' | 'candle' | 'position' | 'constant' | 'derived'
+  kind: 'indicator' | 'market_price' | 'candle' | 'position' | 'constant' | 'derived' | 'vision_result'
   name?: string
   value?: number | string | boolean | null
   indicator?: string
@@ -21,10 +21,12 @@ export type WorkflowOperand = {
   addend?: number
   offset?: number
   lookback?: number
+  source_node_id?: string
+  output_key?: string
 }
 
 export type WorkflowCondition = {
-  kind: 'comparison' | 'cross' | 'consecutive' | 'indicator_trend' | 'candle_pattern' | 'market_structure' | 'breakout' | 'atr_distance' | 'position_state' | 'group'
+  kind: 'comparison' | 'cross' | 'consecutive' | 'indicator_trend' | 'candle_pattern' | 'market_structure' | 'breakout' | 'atr_distance' | 'position_state' | 'vision_result' | 'group'
   description?: string
   left?: WorkflowOperand
   operator?: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq'
@@ -56,13 +58,18 @@ export type WorkflowActionKind = 'open_buy' | 'open_sell' | 'no_action' | 'close
 
 export type WorkflowNode = {
   id: string
-  type: 'entry' | 'condition' | 'vision_condition' | 'ai_condition' | 'action'
+  type: 'entry' | 'condition' | 'vision_extract' | 'ai_condition' | 'action'
   label: string
   stage?: WorkflowStageName
   condition?: WorkflowCondition
   instruction?: string
-  expected_result?: string
-  result_options?: string[]
+  output?: {
+    key: string
+    label: string
+    type: 'enum'
+    options: Array<{ value: string; label: string }>
+    fallback: string
+  }
   lookback?: number
   minimum_confidence?: number
   data_type?: 'kline' | 'screenshot' | 'both'

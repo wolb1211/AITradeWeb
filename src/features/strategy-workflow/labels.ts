@@ -18,10 +18,10 @@ const patternNames: Record<string, string> = {
   bearish_pinbar: '看跌 Pin Bar', doji: '十字星', HH: '更高高点 HH', HL: '更高低点 HL', LH: '更低高点 LH', LL: '更低低点 LL',
 }
 
-export function describeWorkflowNode(node: WorkflowNode): string {
+export function describeWorkflowNode(node: WorkflowNode, nodes: WorkflowNode[] = []): string {
   if (node.type === 'entry') return node.stage === 'position' ? 'EA提供风控数据' : 'EA提供开仓数据'
-  if (node.type === 'condition') return node.condition ? describeCondition(node.condition) : '请选择条件'
-  if (node.type === 'vision_condition') return meaningfulInstruction(node.instruction) ? `截图：${shortText(node.instruction!)}` : '请选择截图识别规则'
+  if (node.type === 'condition') return node.condition ? describeCondition(node.condition, nodes) : '请选择条件'
+  if (node.type === 'vision_extract') return node.output?.label?.trim() ? `截图提取：${node.output.label.trim()}` : '请设置截图输出'
   if (node.type === 'ai_condition') return meaningfulInstruction(node.instruction) ? `AI：${shortText(node.instruction!)}` : '请选择AI判断规则'
   const action = node.action
   if (!action) return '请选择执行动作'
@@ -37,22 +37,32 @@ export function describeWorkflowNode(node: WorkflowNode): string {
   return '保持持仓'
 }
 
-export function describeCondition(condition: WorkflowCondition): string {
-  if (condition.kind === 'cross') return `${describeOperand(condition.left)}${condition.direction === 'below' ? '下破' : '上穿'}${describeOperand(condition.right)}`
-  if (condition.kind === 'comparison' || condition.kind === 'breakout' || condition.kind === 'atr_distance' || condition.kind === 'position_state') {
-    return `${describeOperand(condition.left)}${operatorNames[condition.operator || 'gt']}${describeOperand(condition.right)}`
+export function describeCondition(condition: WorkflowCondition, nodes: WorkflowNode[] = []): string {
+  if (condition.kind === 'vision_result') {
+    const source = nodes.find((node) => node.id === condition.left?.source_node_id && node.type === 'vision_extract')
+    const output = source?.output
+    const option = output?.options.find((item) => item.value === String(condition.right?.value ?? ''))
+    return `${output?.label || '截图识别结果'}${condition.operator === 'neq' ? '不等于' : '等于'}${option?.label || '请选择结果'}`
   }
-  if (condition.kind === 'consecutive') return `连续${condition.count || 1}根${describeOperand(condition.left)}${operatorNames[condition.operator || 'gt']}${describeOperand(condition.right)}`
-  if (condition.kind === 'indicator_trend') return `${describeOperand(condition.left)}连续${condition.count || 1}根${condition.direction === 'down' ? '下降' : '上升'}`
+  if (condition.kind === 'cross') return `${describeOperand(condition.left, nodes)}${condition.direction === 'below' ? '下破' : '上穿'}${describeOperand(condition.right, nodes)}`
+  if (condition.kind === 'comparison' || condition.kind === 'breakout' || condition.kind === 'atr_distance' || condition.kind === 'position_state') {
+    return `${describeOperand(condition.left, nodes)}${operatorNames[condition.operator || 'gt']}${describeOperand(condition.right, nodes)}`
+  }
+  if (condition.kind === 'consecutive') return `连续${condition.count || 1}根${describeOperand(condition.left, nodes)}${operatorNames[condition.operator || 'gt']}${describeOperand(condition.right, nodes)}`
+  if (condition.kind === 'indicator_trend') return `${describeOperand(condition.left, nodes)}连续${condition.count || 1}根${condition.direction === 'down' ? '下降' : '上升'}`
   if (condition.kind === 'candle_pattern') return `${condition.lookback && condition.lookback > 1 ? `最近${condition.lookback}根` : ''}出现${patternNames[condition.pattern || ''] || condition.pattern || 'K线形态'}`
   if (condition.kind === 'market_structure') return `${condition.lookback && condition.lookback > 1 ? `最近${condition.lookback}根` : ''}出现${patternNames[condition.pattern || ''] || condition.pattern || '市场结构'}`
   if (condition.kind === 'group') return `${condition.conditions?.length || 0}个条件${condition.group_operator === 'any' ? '任一满足' : '全部满足'}`
   return condition.description?.trim() || '请选择条件'
 }
 
-export function describeOperand(operand?: WorkflowOperand): string {
+export function describeOperand(operand?: WorkflowOperand, nodes: WorkflowNode[] = []): string {
   if (!operand) return '未设置'
   if (operand.kind === 'constant') return formatNumber(operand.value)
+  if (operand.kind === 'vision_result') {
+    const source = nodes.find((node) => node.id === operand.source_node_id && node.type === 'vision_extract')
+    return source?.output?.label || '截图识别结果'
+  }
   if (operand.kind !== 'indicator') return operandNames[operand.name || ''] || operand.name || '未设置'
   const name = indicatorNames[operand.indicator || ''] || (operand.indicator || '指标').toUpperCase()
   const params = operand.params || {}

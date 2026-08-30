@@ -37,8 +37,16 @@
 .workflow-node > .workflow-entry-summary { color: var(--muted); font-size: 12px; }
 .workflow-node-entry { border-color: rgb(75 191 137 / 48%); }
 .workflow-node-condition { border-color: rgb(74 144 226 / 48%); }
-.workflow-node-vision_condition, .workflow-node-ai_condition { border-color: rgb(143 99 255 / 55%); }
+.workflow-node-vision_extract, .workflow-node-ai_condition { border-color: rgb(143 99 255 / 55%); }
 .workflow-node-action { border-color: rgb(245 166 35 / 48%); }
+.workflow-vision-output { gap: 10px; }
+.workflow-output-list { display: grid; gap: 8px; }
+.workflow-output-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto 30px; align-items: center; gap: 8px; }
+.workflow-output-list > div > small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.workflow-output-list > div.fixed input { color: var(--muted); }
+.workflow-output-list button { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: #ef7b82; border: 0; border-radius: 7px; background: transparent; }
+.workflow-output-list button:disabled { opacity: .28; cursor: not-allowed; }
+.workflow-add-output { width: max-content; padding: 7px 10px; display: inline-flex; align-items: center; gap: 5px; color: #4bd1a0; border: 1px dashed rgb(75 209 160 / 45%); border-radius: 8px; background: transparent; font-size: 12px; }
 .workflow-node .react-flow__handle { width: 8px; height: 8px; border: 2px solid var(--panel); background: #7566ff; }
 .workflow-branches { margin: 13px -15px -13px; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
 .workflow-branches > div { position: relative; min-height: 35px; display: flex; align-items: center; justify-content: center; gap: 8px; }
