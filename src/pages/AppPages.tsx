@@ -471,13 +471,24 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   // Prefer an unsaved local draft, then the persisted workflow from the API;
   // only brand-new strategies should start with the blank default graph.
   const [workflow, setWorkflow] = useState(() => {
-    if (!deployment?.workflow) return initialWorkflowDraft?.workflow || createDefaultWorkflow()
-    // A draft is an unsaved edit only when it is newer than the persisted
-    // deployment. Older drafts (including a previously-created default graph)
-    // must not mask the workflow saved with the strategy.
-    const draftTime = initialWorkflowDraft?.saved_at ? Date.parse(initialWorkflowDraft.saved_at) : 0
-    const savedTime = deployment.updated_at ? Date.parse(deployment.updated_at) : 0
-    return draftTime > savedTime ? initialWorkflowDraft!.workflow : deployment.workflow
+    const defaultWorkflow = createDefaultWorkflow()
+    let baseWorkflow: CustomStrategyWorkflow
+    if (!deployment?.workflow) baseWorkflow = initialWorkflowDraft?.workflow || defaultWorkflow
+    else {
+      const persisted = deployment.workflow
+      const draftTime = initialWorkflowDraft?.saved_at ? Date.parse(initialWorkflowDraft.saved_at) : 0
+      const savedTime = deployment.updated_at ? Date.parse(deployment.updated_at) : 0
+      baseWorkflow = draftTime > savedTime ? initialWorkflowDraft!.workflow : persisted
+    }
+    // Older text-based strategies may have a partial workflow object (or
+    // missing data_requirements). Merge each stage with the current defaults
+    // so the editor remains usable and can be migrated on the next save.
+    return {
+      ...defaultWorkflow,
+      ...baseWorkflow,
+      open: { ...defaultWorkflow.open, ...baseWorkflow.open, data_requirements: { ...defaultWorkflow.open.data_requirements, ...(baseWorkflow.open?.data_requirements || {}) } },
+      position: { ...defaultWorkflow.position, ...baseWorkflow.position, data_requirements: { ...defaultWorkflow.position.data_requirements, ...(baseWorkflow.position?.data_requirements || {}) } },
+    }
   })
   const [workflowDraftDirty, setWorkflowDraftDirty] = useState(false)
   const [workflowDraftSavedAt, setWorkflowDraftSavedAt] = useState(initialWorkflowDraft?.saved_at || '')
