@@ -46,7 +46,11 @@ export function describeCondition(condition: WorkflowCondition, nodes: WorkflowN
     return `${output?.label || '截图识别结果'} ${condition.operator === 'neq' ? '不等于' : '等于'} ${option?.label || '请选择结果'}`
   }
   if (condition.kind === 'cross') return `${condition.cross_mode === 'latest' ? `最近${condition.lookback || 2}根最新交叉：` : ''}${describeOperand(condition.left, nodes)} ${condition.direction === 'below' ? '下破' : '上穿'} ${describeOperand(condition.right, nodes)}`
-  if (condition.kind === 'comparison' || condition.kind === 'breakout' || condition.kind === 'atr_distance' || condition.kind === 'position_state') {
+  if (condition.kind === 'atr_distance') {
+    const distanceName = condition.left?.name === 'stop_distance' ? '当前价格与止损的距离' : '有利方向移动距离'
+    return `${distanceName} ${operatorNames[condition.operator || 'gte']} ${describeOperand(condition.right, nodes)}`
+  }
+  if (condition.kind === 'comparison' || condition.kind === 'breakout' || condition.kind === 'position_state') {
     return `${describeOperand(condition.left, nodes)} ${operatorNames[condition.operator || 'gt']} ${describeOperand(condition.right, nodes)}`
   }
   if (condition.kind === 'consecutive') return `连续${condition.count || 1}根 ${describeOperand(condition.left, nodes)} ${operatorNames[condition.operator || 'gt']} ${describeOperand(condition.right, nodes)}`
