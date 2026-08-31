@@ -31,6 +31,7 @@ type EditorNodeData = {
   selected: boolean
   onSelect: (id: string) => void
   onAdd: (id: string, branch: 'next' | 'yes' | 'no') => void
+  readOnly?: boolean
 }
 
 function describeEntryData(requirements: WorkflowDataRequirements) {
@@ -65,13 +66,13 @@ function StrategyNode({ data }: NodeProps<FlowNode<EditorNodeData>>) {
     {node.type === 'entry' && <small className="workflow-entry-summary">{describeEntryData(data.dataRequirements)}</small>}
     {node.type === 'vision_extract' && <small>{node.output?.options.map((item) => item.label).join(' / ') || '固定枚举输出'}</small>}
     {node.type === 'ai_condition' && <small>开放语义判断</small>}
-    {sequential && <>
+    {!data.readOnly && sequential && <>
       <Handle id="next" type="source" position={Position.Bottom} isConnectable={false} />
       <button className="workflow-add-button single" type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'next') }} aria-label="添加下一步"><Plus size={14} /></button>
     </>}
     {condition && <div className="workflow-branches">
-      <div><span className="yes"><Check size={12} />是</span><Handle id="yes" type="source" position={Position.Bottom} isConnectable={false} /><button type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'yes') }}><Plus size={13} /></button></div>
-      <div><span className="no"><X size={12} />否</span><Handle id="no" type="source" position={Position.Bottom} isConnectable={false} /><button type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'no') }}><Plus size={13} /></button></div>
+      <div><span className="yes"><Check size={12} />是</span><Handle id="yes" type="source" position={Position.Bottom} isConnectable={false} />{!data.readOnly && <button type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'yes') }}><Plus size={13} /></button>}</div>
+      <div><span className="no"><X size={12} />否</span><Handle id="no" type="source" position={Position.Bottom} isConnectable={false} />{!data.readOnly && <button type="button" onClick={(event) => { event.stopPropagation(); data.onAdd(node.id, 'no') }}><Plus size={13} /></button>}</div>
     </div>}
   </div>
 }
@@ -191,12 +192,13 @@ function conditionReferencesVision(node: WorkflowNode, sourceId: string): boolea
   return visit(node.condition)
 }
 
-function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
+function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, readOnly }: {
   value: CustomStrategyWorkflow
   stageName: WorkflowStageName
   selectedId: string
   onSelect: (id: string) => void
   onAdd: (id: string, branch: 'next' | 'yes' | 'no') => void
+  readOnly?: boolean
 }) {
   const { fitView } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
@@ -211,16 +213,27 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
   }, [fitView, stageName, value])
   useEffect(() => {
     if (!nodesInitialized || positions.size === 0) return
-    const frame = window.requestAnimationFrame(() => fitView({ padding: 0.22, duration: 280 }))
-    return () => window.cancelAnimationFrame(frame)
+    // React Flow updates its internal node bounds one render after our ELK
+    // positions arrive. Fit once on the next frame and once more shortly
+    // after so the initial view includes the complete graph, not just entry.
+    const fit = () => fitView({ padding: 0.35, duration: 280, maxZoom: 1 })
+    const frame = window.requestAnimationFrame(() => {
+      fit()
+      window.requestAnimationFrame(fit)
+    })
+    const timer = window.setTimeout(fit, 500)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
   }, [fitView, nodesInitialized, positions])
   const nodes = useMemo<FlowNode<EditorNodeData>[]>(() => value[stageName].nodes.map((node) => ({
     id: node.id,
     type: 'strategy',
     position: positions.get(node.id) || node.position || { x: 0, y: 0 },
-    data: { workflowNode: node, stageNodes: value[stageName].nodes, dataRequirements: value[stageName].data_requirements, selected: selectedId === node.id, onSelect, onAdd },
-    draggable: true,
-  })), [onAdd, onSelect, positions, selectedId, stageName, value])
+    data: { workflowNode: node, stageNodes: value[stageName].nodes, dataRequirements: value[stageName].data_requirements, selected: selectedId === node.id, onSelect, onAdd, readOnly },
+    draggable: !readOnly,
+  })), [onAdd, onSelect, positions, readOnly, selectedId, stageName, value])
   const edges = useMemo<FlowEdge[]>(() => value[stageName].edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
@@ -240,19 +253,22 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd }: {
       stroke: edge.source_handle === 'yes' ? 'rgba(61, 190, 139, .72)' : edge.source_handle === 'no' ? 'rgba(235, 105, 116, .68)' : undefined,
     },
   })), [stageName, value])
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView proOptions={{ hideAttribution: true }}>
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView fitViewOptions={{ padding: 0.35, maxZoom: 1 }} onInit={(instance) => { window.setTimeout(() => instance.fitView({ padding: 0.35, duration: 280, maxZoom: 1 }), 600) }} proOptions={{ hideAttribution: true }}>
     <Background gap={22} size={1} />
     <Controls showInteractive={false} />
   </ReactFlow>
 }
 
-export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus }: {
+export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus, fixedStage, readOnly }: {
   value: CustomStrategyWorkflow
-  onChange: (value: CustomStrategyWorkflow) => void
-  onGenerateWithAi?: () => void
+  onChange?: (value: CustomStrategyWorkflow) => void
+  onGenerateWithAi?: (stage: WorkflowStageName) => void
   draftStatus?: string
+  fixedStage?: WorkflowStageName
+  readOnly?: boolean
 }) {
-  const [stageName, setStageName] = useState<WorkflowStageName>('open')
+  const [activeStage, setActiveStage] = useState<WorkflowStageName>('open')
+  const stageName = fixedStage || activeStage
   const [selectedId, setSelectedId] = useState(value.open.entry_node_id)
   const [addTarget, setAddTarget] = useState<{ source: string; branch: 'next' | 'yes' | 'no' } | null>(null)
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[] | null>(null)
@@ -270,7 +286,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
   const updateSelected = useCallback((nextNode: WorkflowNode) => {
     const stageNodes = value[stageName].nodes.map((node) => node.id === selectedId ? nextNode : node)
     const normalizedNode = { ...nextNode, label: describeWorkflowNode(nextNode, stageNodes) }
-    onChange({
+    onChange?.({
       ...value,
       [stageName]: {
         ...value[stageName],
@@ -279,7 +295,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
     })
   }, [onChange, selectedId, stageName, value])
   const updateRequirements = useCallback((requirements: CustomStrategyWorkflow[WorkflowStageName]['data_requirements']) => {
-    onChange({ ...value, [stageName]: { ...value[stageName], data_requirements: requirements } })
+    onChange?.({ ...value, [stageName]: { ...value[stageName], data_requirements: requirements } })
   }, [onChange, stageName, value])
   const deleteSelected = useCallback(() => {
     if (!selected || selected.type === 'entry') return
@@ -294,7 +310,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
         nodes: stage.nodes.filter((node) => node.id !== selected.id),
         edges: stage.edges.filter((edge) => edge.source !== selected.id && edge.target !== selected.id),
       })
-      onChange({ ...value, [stageName]: nextStage })
+      onChange?.({ ...value, [stageName]: nextStage })
       setSelectedId(stage.entry_node_id)
       return
     }
@@ -307,7 +323,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
         nodes: stage.nodes.filter((node) => node.id !== selected.id),
         edges: stage.edges.filter((edge) => edge.source !== selected.id && edge.target !== selected.id),
       })
-      onChange({ ...value, [stageName]: nextStage })
+      onChange?.({ ...value, [stageName]: nextStage })
       setSelectedId(incoming[0]?.source || stage.entry_node_id)
       return
     }
@@ -316,7 +332,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
       .filter((edge) => !removedIds.has(edge.id))
       .map((edge) => incoming.some((item) => item.id === edge.id) ? { ...edge, target: fallback } : edge)
     const nextStage = pruneWorkflowStage({ ...stage, nodes: stage.nodes.filter((node) => node.id !== selected.id), edges })
-    onChange({ ...value, [stageName]: nextStage })
+    onChange?.({ ...value, [stageName]: nextStage })
     setSelectedId(stage.entry_node_id)
   }, [onChange, selected, stageName, value])
   const addNext = useCallback((source: string, branch: 'next' | 'yes' | 'no') => setAddTarget({ source, branch }), [])
@@ -364,21 +380,22 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
       ]
     }
     const nextStage = pruneWorkflowStage({ ...stage, nodes, edges })
-    onChange({ ...value, [stageName]: nextStage })
+    onChange?.({ ...value, [stageName]: nextStage })
     setSelectedId(id)
     setAddTarget(null)
   }, [addTarget, onChange, stageName, value])
-  return <div className="workflow-editor-shell">
+  return <div className={`workflow-editor-shell${readOnly ? ' workflow-editor-readonly' : ''}`}>
     <div className="workflow-editor-toolbar">
-      <div className="workflow-stage-tabs">
-        <button type="button" className={stageName === 'open' ? 'active' : ''} onClick={() => setStageName('open')}>开仓流程</button>
-        <button type="button" className={stageName === 'position' ? 'active' : ''} onClick={() => setStageName('position')}>持仓风控</button>
-      </div>
-      <div className="workflow-toolbar-actions">{draftStatus && <span className="workflow-draft-status"><Check size={13} />{draftStatus}</span>}<button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value))}><Check size={16} />检查流程</button><button className="workflow-ai-generate" type="button" onClick={onGenerateWithAi}><Sparkles size={16} />AI帮我生成</button></div>
+      {!fixedStage && <div className="workflow-stage-tabs">
+        <button type="button" className={stageName === 'open' ? 'active' : ''} onClick={() => setActiveStage('open')}>开仓流程</button>
+        <button type="button" className={stageName === 'position' ? 'active' : ''} onClick={() => setActiveStage('position')}>持仓风控</button>
+      </div>}
+      {fixedStage && <strong className="workflow-stage-caption">{fixedStage === 'open' ? '开仓流程图' : '持仓风控流程图'}</strong>}
+      {!readOnly && <div className="workflow-toolbar-actions">{draftStatus && <span className="workflow-draft-status"><Check size={13} />{draftStatus}</span>}<button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value).filter((issue) => !fixedStage || issue.stage === fixedStage))}><Check size={16} />检查{fixedStage === 'open' ? '开仓' : fixedStage === 'position' ? '风控' : ''}流程</button><button className="workflow-ai-generate" type="button" onClick={() => onGenerateWithAi?.(stageName)}><Sparkles size={16} />AI帮我生成</button></div>}
     </div>
     <div className="workflow-editor-body">
-      <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} /></ReactFlowProvider></div>
-      <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} indicatorCatalog={indicatorCatalog} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />
+      <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} readOnly={readOnly} /></ReactFlowProvider></div>
+      {!readOnly && <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} indicatorCatalog={indicatorCatalog} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />}
     </div>
     {addTarget && <div className="workflow-add-menu" role="dialog" aria-label="添加流程节点">
       <div><strong>添加下一步</strong><button type="button" onClick={() => setAddTarget(null)}><X size={16} /></button></div>
@@ -387,6 +404,6 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus 
       <button type="button" onClick={() => insertNode('ai_condition')}><Bot size={17} /><span><strong>AI判断规则</strong><small>处理暂时无法结构化的开放条件</small></span></button>
       <button type="button" onClick={() => insertNode('action')}><ShieldCheck size={17} /><span><strong>执行动作</strong><small>设置开仓、平仓或修改止损</small></span></button>
     </div>}
-    {validationIssues && <div className="workflow-validation-dialog" role="dialog" aria-label="流程检查结果"><div><span className={validationIssues.length ? 'error' : 'success'}>{validationIssues.length ? <X size={18} /> : <Check size={18} />}</span><div><strong>{validationIssues.length ? `发现 ${validationIssues.length} 个问题` : '流程检查通过'}</strong><small>{validationIssues.length ? '请修改后再次检查' : '开仓和持仓风控流程结构完整'}</small></div><button type="button" onClick={() => setValidationIssues(null)}><X size={17} /></button></div>{validationIssues.length > 0 && <ul>{validationIssues.map((issue, index) => <li key={`${issue.stage}-${issue.nodeId}-${index}`}><b>{issue.stage === 'open' ? '开仓' : '风控'}</b><span>{issue.message}</span></li>)}</ul>}<button className="button button-primary" type="button" onClick={() => setValidationIssues(null)}>知道了</button></div>}
+    {validationIssues && <div className="workflow-validation-dialog" role="dialog" aria-label="流程检查结果"><div><span className={validationIssues.length ? 'error' : 'success'}>{validationIssues.length ? <X size={18} /> : <Check size={18} />}</span><div><strong>{validationIssues.length ? `发现 ${validationIssues.length} 个问题` : '流程检查通过'}</strong><small>{validationIssues.length ? '请修改后再次检查' : fixedStage ? `${fixedStage === 'open' ? '开仓' : '风控'}流程结构完整` : '开仓和持仓风控流程结构完整'}</small></div><button type="button" onClick={() => setValidationIssues(null)}><X size={17} /></button></div>{validationIssues.length > 0 && <ul>{validationIssues.map((issue, index) => <li key={`${issue.stage}-${issue.nodeId}-${index}`}><b>{issue.stage === 'open' ? '开仓' : '风控'}</b><span>{issue.message}</span></li>)}</ul>}<button className="button button-primary" type="button" onClick={() => setValidationIssues(null)}>知道了</button></div>}
   </div>
 }

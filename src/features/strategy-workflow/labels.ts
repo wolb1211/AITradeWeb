@@ -34,6 +34,7 @@ export function describeWorkflowNode(node: WorkflowNode, nodes: WorkflowNode[] =
   if (action.kind === 'add_sell') return `加空仓 ${describeVolume(action.volume)}`.trim()
   if (action.kind === 'modify_sl') return `修改止损至${describeTarget(action.target)}`
   if (action.kind === 'modify_tp') return `修改止盈至${describeTarget(action.target)}`
+  if (action.kind === 'cancel_pending') return '取消挂单'
   return '保持持仓'
 }
 
@@ -44,7 +45,7 @@ export function describeCondition(condition: WorkflowCondition, nodes: WorkflowN
     const option = output?.options.find((item) => item.value === String(condition.right?.value ?? ''))
     return `${output?.label || '截图识别结果'} ${condition.operator === 'neq' ? '不等于' : '等于'} ${option?.label || '请选择结果'}`
   }
-  if (condition.kind === 'cross') return `${describeOperand(condition.left, nodes)} ${condition.direction === 'below' ? '下破' : '上穿'} ${describeOperand(condition.right, nodes)}`
+  if (condition.kind === 'cross') return `${condition.cross_mode === 'latest' ? `最近${condition.lookback || 2}根最新交叉：` : ''}${describeOperand(condition.left, nodes)} ${condition.direction === 'below' ? '下破' : '上穿'} ${describeOperand(condition.right, nodes)}`
   if (condition.kind === 'comparison' || condition.kind === 'breakout' || condition.kind === 'atr_distance' || condition.kind === 'position_state') {
     return `${describeOperand(condition.left, nodes)} ${operatorNames[condition.operator || 'gt']} ${describeOperand(condition.right, nodes)}`
   }

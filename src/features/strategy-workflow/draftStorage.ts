@@ -8,6 +8,27 @@ type WorkflowDraft = {
 }
 
 const PREFIX = 'gainlab_ai_trader:workflow_draft'
+const SETTINGS_PREFIX = 'gainlab_ai_trader:strategy_settings_draft'
+
+export type StrategySettingsDraftValue = {
+  strategyName: string
+  strategyStatus: string
+  mtLogin: string
+  eaDescription: string
+  sizeMode: 'fixed' | 'risk'
+  fixedVolume: string
+  riskBaseMode: 'fixed_loss' | 'balance_percent'
+  riskAmount: string
+  riskPercent: string
+  maxPositions: string
+  allowAdd: boolean
+}
+
+type StrategySettingsDraft = {
+  schema_version: 1
+  saved_at: string
+  settings: StrategySettingsDraftValue
+}
 
 const legacyResultLabels: Record<string, string> = {
   matched: '满足识别条件', not_matched: '不满足识别条件', bullish: '多头信号', bearish: '空头信号',
@@ -85,5 +106,29 @@ export function saveWorkflowDraft(key: string, workflow: CustomStrategyWorkflow)
 }
 
 export function clearWorkflowDraft(key: string) {
+  localStorage.removeItem(key)
+}
+
+export function strategySettingsDraftKey(userId: string, deploymentId = 'new') {
+  return `${SETTINGS_PREFIX}:${userId || 'anonymous'}:${deploymentId || 'new'}`
+}
+
+export function loadStrategySettingsDraft(key: string): StrategySettingsDraft | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null') as StrategySettingsDraft | null
+    if (!value || value.schema_version !== 1 || !value.settings) return null
+    return value
+  } catch {
+    return null
+  }
+}
+
+export function saveStrategySettingsDraft(key: string, settings: StrategySettingsDraftValue) {
+  const draft: StrategySettingsDraft = { schema_version: 1, saved_at: new Date().toISOString(), settings }
+  localStorage.setItem(key, JSON.stringify(draft))
+  return draft
+}
+
+export function clearStrategySettingsDraft(key: string) {
   localStorage.removeItem(key)
 }

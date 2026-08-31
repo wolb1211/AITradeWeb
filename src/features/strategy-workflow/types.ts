@@ -55,6 +55,7 @@ export type WorkflowCondition = {
   operator?: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq'
   right?: WorkflowOperand
   direction?: 'above' | 'below' | 'up' | 'down' | 'bullish' | 'bearish'
+  cross_mode?: 'any' | 'latest'
   lookback?: number
   count?: number
   pattern?: string
@@ -77,7 +78,7 @@ export type WorkflowVolume = {
   value: number
 }
 
-export type WorkflowActionKind = 'open_buy' | 'open_sell' | 'no_action' | 'close_all' | 'close_partial' | 'add_buy' | 'add_sell' | 'modify_sl' | 'modify_tp' | 'hold'
+export type WorkflowActionKind = 'open_buy' | 'open_sell' | 'no_action' | 'close_all' | 'close_partial' | 'add_buy' | 'add_sell' | 'modify_sl' | 'modify_tp' | 'cancel_pending' | 'hold'
 
 export type WorkflowNode = {
   id: string

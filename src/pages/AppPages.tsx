@@ -1,6 +1,6 @@
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bot, BrainCircuit,
-  Check, ChevronRight, CircleDollarSign, Clock3, Coins, Copy, CreditCard, Database,
+  Check, ChevronDown, ChevronRight, CircleDollarSign, Clock3, Coins, Copy, CreditCard, Database,
   Download, Ellipsis, FileClock, Filter, Fingerprint, ImageIcon, KeyRound, LineChart, LockKeyhole, Mail,
   PauseCircle, PlayCircle, Plus, ReceiptText, RefreshCcw, Search, Settings2, ShieldCheck, Sparkles, Trash2, UserRound, UsersRound, X,
   WalletCards, Zap,
@@ -14,7 +14,12 @@ import { EmptyState, PageHeading, StatCard, StatusPill, TextLink } from '../comp
 import type { PnlCurvePoint } from '../components/PnlChart'
 import { ApiError, apiRequest, authUserDisplayName, authUserVipDetail, authUserVipLabel, clearSession, getStoredUser, post, saveStoredUser, type AuthUser } from '../lib/api'
 import { createDefaultWorkflow } from '../features/strategy-workflow/defaults'
-import { loadWorkflowDraft, saveWorkflowDraft, workflowDraftKey } from '../features/strategy-workflow/draftStorage'
+import {
+  clearStrategySettingsDraft, clearWorkflowDraft, loadStrategySettingsDraft, loadWorkflowDraft,
+  saveStrategySettingsDraft, saveWorkflowDraft, strategySettingsDraftKey, workflowDraftKey,
+  type StrategySettingsDraftValue,
+} from '../features/strategy-workflow/draftStorage'
+import type { CustomStrategyWorkflow, WorkflowStage, WorkflowStageName } from '../features/strategy-workflow/types'
 
 const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({ default: module.PnlChart })))
 const WorkflowEditor = lazy(() => import('../features/strategy-workflow/WorkflowEditor').then((module) => ({ default: module.WorkflowEditor })))
@@ -34,6 +39,8 @@ type PortalStrategy = {
   ai_user_configured: boolean
   open_data_type: string; open_kline_count: number; position_data_type: string; position_kline_count: number
   open_rule_plan?: CustomRulePlan; position_rule_plan?: CustomRulePlan; rule_engine_version?: number
+  workflow?: CustomStrategyWorkflow
+  compiled_workflow?: Record<string, unknown>
   open_requested_kline_count?: number; position_requested_kline_count?: number
   call_mode: string; call_val: number; position_size_mode: string; fixed_volume: number; risk_base_mode: string
   risk_amount: number; risk_percent: number; allow_add: boolean; max_positions: number; updated_at: string
@@ -422,6 +429,12 @@ export function StrategiesPage() {
 function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }: { source?: 'official' | 'custom'; editing?: boolean; deployment?: PortalStrategy; onSaved?: () => void; onCancel?: () => void }) {
   const navigate = useNavigate()
   const strategySource: 'official' | 'custom' = source || (deployment?.strategy_code === 'CUSTOM_AI_V1' ? 'custom' : 'official')
+  const draftOwnerId = String(getStoredUser()?.id || 'anonymous')
+  const settingsDraftStorageKey = useMemo(
+    () => strategySettingsDraftKey(draftOwnerId, `${strategySource}-${deployment?.id || 'new'}`),
+    [deployment?.id, draftOwnerId, strategySource],
+  )
+  const initialSettingsDraft = useMemo(() => loadStrategySettingsDraft(settingsDraftStorageKey), [settingsDraftStorageKey])
   const [sizeMode, setSizeMode] = useState<'fixed' | 'risk'>(deployment?.position_size_mode === 'risk' ? 'risk' : 'fixed')
   const [strategyName, setStrategyName] = useState(deployment?.name || (strategySource === 'custom' ? '我的自定义AI策略' : 'GL 趋势自动分析策略'))
   const [strategyStatus, setStrategyStatus] = useState(deployment?.status || 'active')
@@ -453,14 +466,28 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const [saving, setSaving] = useState(false)
   const [customPreview, setCustomPreview] = useState<CustomStrategyPreview | null>(null)
   const [pendingStrategyPayload, setPendingStrategyPayload] = useState<Record<string, unknown> | null>(null)
-  const workflowDraftStorageKey = useMemo(() => workflowDraftKey(String(getStoredUser()?.id || 'anonymous'), deployment?.id || 'new'), [deployment?.id])
+  const workflowDraftStorageKey = useMemo(() => workflowDraftKey(draftOwnerId, deployment?.id || 'new'), [deployment?.id, draftOwnerId])
   const initialWorkflowDraft = useMemo(() => loadWorkflowDraft(workflowDraftStorageKey), [workflowDraftStorageKey])
-  const [workflow, setWorkflow] = useState(() => initialWorkflowDraft?.workflow || createDefaultWorkflow())
+  // Prefer an unsaved local draft, then the persisted workflow from the API;
+  // only brand-new strategies should start with the blank default graph.
+  const [workflow, setWorkflow] = useState(() => {
+    if (!deployment?.workflow) return initialWorkflowDraft?.workflow || createDefaultWorkflow()
+    // A draft is an unsaved edit only when it is newer than the persisted
+    // deployment. Older drafts (including a previously-created default graph)
+    // must not mask the workflow saved with the strategy.
+    const draftTime = initialWorkflowDraft?.saved_at ? Date.parse(initialWorkflowDraft.saved_at) : 0
+    const savedTime = deployment.updated_at ? Date.parse(deployment.updated_at) : 0
+    return draftTime > savedTime ? initialWorkflowDraft!.workflow : deployment.workflow
+  })
   const [workflowDraftDirty, setWorkflowDraftDirty] = useState(false)
   const [workflowDraftSavedAt, setWorkflowDraftSavedAt] = useState(initialWorkflowDraft?.saved_at || '')
   const workflowRef = useRef(workflow)
   const workflowDraftDirtyRef = useRef(false)
-  const [workflowAiOpened, setWorkflowAiOpened] = useState(false)
+  const [workflowAiStage, setWorkflowAiStage] = useState<'open' | 'position' | null>(null)
+  const [workflowGeneratingStage, setWorkflowGeneratingStage] = useState<WorkflowStageName | null>(null)
+  const [workflowOverwriteStage, setWorkflowOverwriteStage] = useState<WorkflowStageName | null>(null)
+  const [expandedWorkflowStages, setExpandedWorkflowStages] = useState({ open: true, position: true })
+  const [expandedAiSettings, setExpandedAiSettings] = useState({ open: false, position: false })
   const [openAi, setOpenAi] = useState<AiFormConfig>({
     mode: deployment?.open_ai_mode === 'custom' ? 'custom' : 'official',
     endpointId: deployment?.open_ai_endpoint_id || '',
@@ -481,6 +508,58 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     keyConfigured: Boolean(deployment?.position_ai_key_configured),
     visionVerified: Boolean(deployment?.position_ai_vision_verified),
   })
+  const settingsDraftRef = useRef<StrategySettingsDraftValue | null>(null)
+  const settingsDraftEnabledRef = useRef(true)
+  useEffect(() => {
+    const settings = initialSettingsDraft?.settings
+    if (!settings) return
+    setStrategyName(settings.strategyName)
+    setStrategyStatus(settings.strategyStatus)
+    setMtLogin(settings.mtLogin)
+    setEaDescription(settings.eaDescription)
+    setSizeMode(settings.sizeMode)
+    setFixedVolume(settings.fixedVolume)
+    setRiskBaseMode(settings.riskBaseMode)
+    setRiskAmount(settings.riskAmount)
+    setRiskPercent(settings.riskPercent)
+    setMaxPositions(settings.maxPositions)
+    setAllowAdd(settings.allowAdd)
+  }, [initialSettingsDraft])
+  useEffect(() => {
+    const settings: StrategySettingsDraftValue = {
+      strategyName,
+      strategyStatus,
+      mtLogin,
+      eaDescription,
+      sizeMode,
+      fixedVolume,
+      riskBaseMode,
+      riskAmount,
+      riskPercent,
+      maxPositions,
+      allowAdd,
+    }
+    settingsDraftRef.current = settings
+    const timer = window.setTimeout(() => {
+      if (settingsDraftEnabledRef.current) saveStrategySettingsDraft(settingsDraftStorageKey, settings)
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [allowAdd, eaDescription, fixedVolume, maxPositions, mtLogin, riskAmount, riskBaseMode, riskPercent, settingsDraftStorageKey, sizeMode, strategyName, strategyStatus])
+  useEffect(() => {
+    const flushSettingsDraft = () => {
+      if (settingsDraftEnabledRef.current && settingsDraftRef.current) {
+        saveStrategySettingsDraft(settingsDraftStorageKey, settingsDraftRef.current)
+      }
+    }
+    window.addEventListener('beforeunload', flushSettingsDraft)
+    return () => { window.removeEventListener('beforeunload', flushSettingsDraft); flushSettingsDraft() }
+  }, [settingsDraftStorageKey])
+  useEffect(() => {
+    const sourceText = initialWorkflowDraft?.workflow.source_text
+    if (!sourceText) return
+    setOpenLogic((current) => current || sourceText.open || '')
+    setPositionLogic((current) => current || sourceText.position || '')
+  }, [initialWorkflowDraft])
   useEffect(() => {
     if (!workflowDraftDirty) return
     const timer = window.setTimeout(() => {
@@ -585,6 +664,10 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
         method: editing ? 'PATCH' : 'POST',
         body: JSON.stringify(compiledConfig ? { ...payload, compiled_config: compiledConfig } : payload),
       })
+      settingsDraftEnabledRef.current = false
+      workflowDraftDirtyRef.current = false
+      clearStrategySettingsDraft(settingsDraftStorageKey)
+      clearWorkflowDraft(workflowDraftStorageKey)
       setCustomPreview(null)
       setPendingStrategyPayload(null)
       notifications.show({ title: editing ? '保存成功' : '创建成功', message: editing ? '策略配置已更新' : '策略 Key 已生成', color: 'gainlab', autoClose: 1800 })
@@ -637,6 +720,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       allow_add: allowAdd,
       open_logic: strategySource === 'custom' ? openLogic.trim() : '',
       position_logic: strategySource === 'custom' ? positionLogic.trim() : '',
+      workflow: strategySource === 'custom' ? workflow : undefined,
       open_data_type: strategySource === 'custom' ? workflow.open.data_requirements.data_type : openDataType,
       open_kline_count: strategySource === 'custom' ? workflow.open.data_requirements.kline_count : Number(openKlineCount),
       position_data_type: strategySource === 'custom' ? workflow.position.data_requirements.data_type : positionDataType,
@@ -671,11 +755,97 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       : editing
         ? '正在保存策略修改...'
         : '正在创建策略并生成 Key...'
+  const workflowDataLabel = (stage: 'open' | 'position') => {
+    const requirements = workflow[stage].data_requirements
+    if (requirements.data_type === 'screenshot') return 'EA图表截图'
+    if (requirements.data_type === 'both') return `K线 × ${requirements.kline_count} + EA图表截图`
+    return `K线 × ${requirements.kline_count}`
+  }
+  const workflowAiLabel = (config: AiFormConfig) => config.mode === 'custom'
+    ? (config.customModel || '自定义 AI')
+    : (aiModelOptions.find((item) => item.id === config.endpointId)?.display_name || config.model || '请选择 AI')
+  const generateWorkflowStage = async (stage: WorkflowStageName) => {
+    const logic = (stage === 'open' ? openLogic : positionLogic).trim()
+    if (logic.length < 5) {
+      notifications.show({ title: '请完善策略规则', message: `请先填写完整的${stage === 'open' ? '开仓' : '持仓风控'}逻辑`, color: 'red' })
+      return
+    }
+    setWorkflowGeneratingStage(stage)
+    try {
+      const result = await apiRequest<{ stage: WorkflowStage; source_text: string; repaired?: boolean; generation_model?: string; customer_billed?: boolean }>('/api/v1/auth/custom-strategy/workflow/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          stage,
+          user_logic: logic,
+          data_requirements: workflow[stage].data_requirements,
+        }),
+      })
+      updateWorkflow({
+        ...workflow,
+        source_mode: 'ai_generated',
+        source_text: { ...workflow.source_text, [stage]: logic },
+        [stage]: result.stage,
+      })
+      setExpandedWorkflowStages((current) => ({ ...current, [stage]: true }))
+      setWorkflowAiStage(null)
+      notifications.show({
+        title: `${stage === 'open' ? '开仓' : '风控'}流程已生成`,
+        message: result.repaired ? 'AI生成结果已自动修复并通过结构检查，请确认流程逻辑。' : '流程已通过结构检查，请确认是否符合您的策略逻辑。',
+        color: 'gainlab',
+        autoClose: 3500,
+      })
+    } catch (reason) {
+      const rawMessage = reason instanceof Error ? reason.message : ''
+      const message = rawMessage === 'workflow_generation_validation_failed'
+        ? 'AI生成的流程结构仍不完整，请稍后重试或调整规则描述。'
+        : rawMessage === 'workflow_generation_model_unavailable'
+          ? '平台流程生成模型暂不可用，请联系管理员检查 qwen-plus 配置。'
+        : rawMessage || 'AI无法生成有效流程，请调整描述后重试'
+      notifications.show({ title: '流程生成失败', message, color: 'red', autoClose: 6000 })
+    } finally {
+      setWorkflowGeneratingStage(null)
+    }
+  }
+  const requestWorkflowGeneration = (stage: WorkflowStageName) => {
+    const logic = (stage === 'open' ? openLogic : positionLogic).trim()
+    if (logic.length < 5) {
+      notifications.show({ title: '请完善策略规则', message: `请先填写完整的${stage === 'open' ? '开仓' : '持仓风控'}逻辑`, color: 'red' })
+      return
+    }
+    if (workflow[stage].nodes.length > 1) {
+      setWorkflowOverwriteStage(stage)
+      return
+    }
+    void generateWorkflowStage(stage)
+  }
   return <form className={`strategy-form ${strategySource === 'custom' ? 'custom-strategy-form' : 'library-strategy-form'}`} onSubmit={submit} aria-busy={saving}>
     {saving && <div className="strategy-saving-overlay" role="status" aria-live="polite"><div><Loader color="teal" size="md" /><strong>{savingMessage}</strong><span>处理完成前请不要关闭页面</span></div></div>}
-    {strategySource === 'official' ? <section className="panel form-section strategy-library-section"><div className="form-section-title"><span>01</span><div><h2>选择GL策略</h2><p>当前可选择已经配置完成的 GL 策略。</p></div></div><label className="library-option selected"><input type="radio" defaultChecked /><strong>{strategyTitle}</strong><button className="library-detail-button" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setStrategyDetailOpened(true) }}>查看详情<ChevronRight size={15} /></button><Check /></label></section> : <section className="strategy-logic-section"><Suspense fallback={<div className="panel loading-block"><Loader color="teal" size="md" />正在加载流程编辑器...</div>}><WorkflowEditor value={workflow} onChange={updateWorkflow} onGenerateWithAi={() => setWorkflowAiOpened(true)} draftStatus={workflowDraftStatus} /></Suspense></section>}
+    {strategySource === 'official' ? <section className="panel form-section strategy-library-section"><div className="form-section-title"><span>01</span><div><h2>选择GL策略</h2><p>当前可选择已经配置完成的 GL 策略。</p></div></div><label className="library-option selected"><input type="radio" defaultChecked /><strong>{strategyTitle}</strong><button className="library-detail-button" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setStrategyDetailOpened(true) }}>查看详情<ChevronRight size={15} /></button><Check /></label></section> : <>
+      <section className={`panel form-section strategy-workflow-module ${expandedWorkflowStages.open ? 'expanded' : ''}`}>
+        <button className="workflow-module-heading" type="button" onClick={() => setExpandedWorkflowStages((current) => ({ ...current, open: !current.open }))} aria-expanded={expandedWorkflowStages.open}>
+          <span className="workflow-module-number">01</span><div><h2>开仓模块</h2><p>设置首单开仓规则、判断开单时机以及开仓方向。</p></div>
+          <div className="workflow-module-summary"><span>{workflowAiLabel(openAi)}</span><span>{workflowDataLabel('open')}</span><span>{workflow.open.nodes.length} 个节点</span></div><ChevronDown size={19} />
+        </button>
+        {expandedWorkflowStages.open && <div className="workflow-module-content">
+          <button className={`workflow-ai-settings-toggle ${expandedAiSettings.open ? 'expanded' : ''}`} type="button" onClick={() => setExpandedAiSettings((current) => ({ ...current, open: !current.open }))} aria-expanded={expandedAiSettings.open}><Bot size={17} /><span><small>开单分析 AI</small><strong>{workflowAiLabel(openAi)}</strong></span><em>{openAi.mode === 'official' ? 'GL提供AI' : '自定义AI'}</em><ChevronDown size={17} /></button>
+          {expandedAiSettings.open && <AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} />}
+          <Suspense fallback={<div className="loading-block"><Loader color="teal" size="md" />正在加载开仓流程...</div>}><WorkflowEditor fixedStage="open" value={workflow} onChange={updateWorkflow} onGenerateWithAi={setWorkflowAiStage} draftStatus={workflowDraftStatus} /></Suspense>
+        </div>}
+      </section>
+      <section className={`panel form-section strategy-workflow-module ${expandedWorkflowStages.position ? 'expanded' : ''}`}>
+        <button className="workflow-module-heading" type="button" onClick={() => setExpandedWorkflowStages((current) => ({ ...current, position: !current.position }))} aria-expanded={expandedWorkflowStages.position}>
+          <span className="workflow-module-number">02</span><div><h2>风控模块</h2><p>设置加仓、平仓、部分平仓以及止损止盈修改规则。</p></div>
+          <div className="workflow-module-summary"><span>{workflowAiLabel(positionAi)}</span><span>{workflowDataLabel('position')}</span><span>{workflow.position.nodes.length} 个节点</span></div><ChevronDown size={19} />
+        </button>
+        {expandedWorkflowStages.position && <div className="workflow-module-content">
+          <button className={`workflow-ai-settings-toggle ${expandedAiSettings.position ? 'expanded' : ''}`} type="button" onClick={() => setExpandedAiSettings((current) => ({ ...current, position: !current.position }))} aria-expanded={expandedAiSettings.position}><Bot size={17} /><span><small>持仓风控 AI</small><strong>{workflowAiLabel(positionAi)}</strong></span><em>{positionAi.mode === 'official' ? 'GL提供AI' : '自定义AI'}</em><ChevronDown size={17} /></button>
+          {expandedAiSettings.position && <AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} />}
+          <Suspense fallback={<div className="loading-block"><Loader color="teal" size="md" />正在加载风控流程...</div>}><WorkflowEditor fixedStage="position" value={workflow} onChange={updateWorkflow} onGenerateWithAi={setWorkflowAiStage} draftStatus={workflowDraftStatus} /></Suspense>
+        </div>}
+      </section>
+    </>}
     <section className="panel form-section strategy-basic-section">
-      <div className="form-section-title"><span>{strategySource === 'custom' ? '03' : '02'}</span><div><h2>基础设置</h2><p>为这个部署设置容易识别的名称和运行状态。</p></div></div>
+      <div className="form-section-title"><span>{strategySource === 'custom' ? '03' : '02'}</span><div><h2>{strategySource === 'custom' ? '策略信息设置' : '基础设置'}</h2><p>设置策略名称、运行状态、说明以及绑定的交易账号。</p></div></div>
       <div className="form-grid">
         <label><span>策略名称</span><input value={strategyName} onChange={(event) => setStrategyName(event.target.value)} /></label>
         <label><span>运行状态</span><Select className="app-mantine-select" value={strategyStatus} onChange={(value) => setStrategyStatus(value || 'active')} data={[{ value: 'active', label: '运行中' }, { value: 'paused', label: '暂停' }]} allowDeselect={false} /></label>
@@ -683,22 +853,27 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
         <label className="mt-login-field"><span>绑定 MT4/MT5 账号</span><input value={mtLogin} onChange={(event) => setMtLogin(event.target.value)} inputMode="numeric" placeholder="留空则在首次连接时自动绑定" /><small>{mtLogin ? (editing ? '此 Key 只允许该 MT 账号使用；可以修改或清空后重新绑定。' : '创建后，此 Key 只允许该 MT 账号使用。') : '留空时，MT 首次连接会自动绑定上传的账号。'}</small></label>
       </div>
     </section>
-    <section className="panel form-section strategy-ai-section"><div className="form-section-title"><span>{strategySource === 'custom' ? '01' : '03'}</span><div><h2>AI 模型</h2><p>开单和持仓风控可以分别选择 GL 提供的模型或配置自己的 AI 接口。带有图片图标的模型支持截图识别。</p></div></div><div className="form-grid two-cards"><AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} /><AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} /></div></section>
-    <section className="panel form-section strategy-risk-section"><div className="form-section-title"><span>{strategySource === 'custom' ? '04' : '04'}</span><div><h2>仓位和风险</h2><p>服务端会在返回订单前按照此处规则计算最终手数。</p></div></div><div className="segmented"><button type="button" className={sizeMode === 'fixed' ? 'active' : ''} onClick={() => setSizeMode('fixed')}>固定手数</button><button type="button" className={sizeMode === 'risk' ? 'active' : ''} onClick={() => setSizeMode('risk')}>以损定仓</button></div>{sizeMode === 'fixed' ? <div className="form-grid"><label><span>每次开单手数</span><input type="number" min="0.01" value={fixedVolume} onChange={(event) => setFixedVolume(event.target.value)} step="0.01" /></label><label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div> : <><div className="form-grid risk-mode-grid"><label><span>风险计算方式</span><Select className="app-mantine-select" value={riskBaseMode} onChange={(value) => setRiskBaseMode(value === 'balance_percent' ? 'balance_percent' : 'fixed_loss')} data={[{ value: 'fixed_loss', label: '固定止损金额' }, { value: 'balance_percent', label: '余额比例止损' }]} allowDeselect={false} /></label>{riskBaseMode === 'fixed_loss' ? <label><span>每单最大风险金额</span><div className="suffix-input"><input type="number" min="0" value={riskAmount} onChange={(event) => setRiskAmount(event.target.value)} /><span>USD</span></div></label> : <label><span>单笔风险占余额比例</span><div className="suffix-input"><input type="number" min="0.01" step="0.1" value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} /><span>%</span></div></label>}<label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div><p className="risk-mode-note">以损定仓需要策略返回有效止损价；没有止损价时，服务端会回退到固定手数或拒绝下单。</p></>}<label className="toggle-row"><div><strong>允许策略加仓</strong><small>仅在策略返回明确加仓动作且未超过持仓上限时执行</small></div><input type="checkbox" checked={allowAdd} onChange={(event) => setAllowAdd(event.target.checked)} /></label></section>
+    {strategySource === 'official' && <section className="panel form-section strategy-ai-section"><div className="form-section-title"><span>03</span><div><h2>AI 模型</h2><p>开单和持仓风控可以分别选择 GL 提供的模型或配置自己的 AI 接口。带有图片图标的模型支持截图识别。</p></div></div><div className="form-grid two-cards"><AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} /><AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} /></div></section>}
+    <section className="panel form-section strategy-risk-section"><div className="form-section-title"><span>04</span><div><h2>{strategySource === 'custom' ? '仓位与风险设置' : '仓位和风险'}</h2><p>服务端会在返回订单前按照此处规则计算最终手数。</p></div></div><div className="segmented"><button type="button" className={sizeMode === 'fixed' ? 'active' : ''} onClick={() => setSizeMode('fixed')}>固定手数</button><button type="button" className={sizeMode === 'risk' ? 'active' : ''} onClick={() => setSizeMode('risk')}>以损定仓</button></div>{sizeMode === 'fixed' ? <div className="form-grid"><label><span>每次开单手数</span><input type="number" min="0.01" value={fixedVolume} onChange={(event) => setFixedVolume(event.target.value)} step="0.01" /></label><label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div> : <><div className="form-grid risk-mode-grid"><label><span>风险计算方式</span><Select className="app-mantine-select" value={riskBaseMode} onChange={(value) => setRiskBaseMode(value === 'balance_percent' ? 'balance_percent' : 'fixed_loss')} data={[{ value: 'fixed_loss', label: '固定止损金额' }, { value: 'balance_percent', label: '余额比例止损' }]} allowDeselect={false} /></label>{riskBaseMode === 'fixed_loss' ? <label><span>每单最大风险金额</span><div className="suffix-input"><input type="number" min="0" value={riskAmount} onChange={(event) => setRiskAmount(event.target.value)} /><span>USD</span></div></label> : <label><span>单笔风险占余额比例</span><div className="suffix-input"><input type="number" min="0.01" step="0.1" value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} /><span>%</span></div></label>}<label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div><p className="risk-mode-note">以损定仓需要策略返回有效止损价；没有止损价时，服务端会回退到固定手数或拒绝下单。</p></>}<label className="toggle-row"><div><strong>允许策略加仓</strong><small>仅在策略返回明确加仓动作且未超过持仓上限时执行</small></div><input type="checkbox" checked={allowAdd} onChange={(event) => setAllowAdd(event.target.checked)} /></label></section>
     <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => editing && onCancel ? onCancel() : navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')}>取消</button><button className="button button-primary" type="submit" disabled={saving || aiModelsLoading || (strategySource === 'official' && !libraryStrategy) || (strategySource === 'custom' && (openLogic.trim().length < 5 || positionLogic.trim().length < 5))}>{saving ? customNeedsCompilation ? 'AI 正在分析策略...' : editing ? '正在保存...' : '正在创建...' : customNeedsCompilation ? '生成策略配置' : editing ? '保存修改' : '创建并生成 Key'}{!saving && <ArrowRight size={17} />}</button></div>
-    <Modal opened={workflowAiOpened} onClose={() => setWorkflowAiOpened(false)} title="AI帮我生成流程" centered size="xl">
-      <div className="custom-rule-grid">
-        <label><span>开仓逻辑</span><textarea rows={8} value={openLogic} onChange={(event) => setOpenLogic(event.target.value)} placeholder="请用自然语言描述开仓方向、条件和止损止盈规则" /></label>
-        <label><span>持仓风控逻辑</span><textarea rows={8} value={positionLogic} onChange={(event) => setPositionLogic(event.target.value)} placeholder="请描述平仓、加仓、部分平仓和修改止损止盈规则" /></label>
+    <Modal opened={Boolean(workflowAiStage)} onClose={() => { if (!workflowGeneratingStage) setWorkflowAiStage(null) }} closeOnClickOutside={!workflowGeneratingStage} closeOnEscape={!workflowGeneratingStage} title={`AI帮我生成${workflowAiStage === 'position' ? '风控' : '开仓'}流程`} centered size="lg">
+      <div className="workflow-generation-note"><Sparkles size={15} /><span>流程图由平台使用 qwen-plus 生成，不会扣除您的 GL AI 余额；当前模块选择的 AI 仅用于策略运行。</span></div>
+      <div className="custom-rule-grid single">
+        {workflowAiStage === 'position'
+          ? <label><span>持仓风控逻辑</span><textarea rows={10} disabled={Boolean(workflowGeneratingStage)} value={positionLogic} onChange={(event) => setPositionLogic(event.target.value)} placeholder="请描述加仓、平仓、部分平仓、取消挂单和修改止损止盈规则" /></label>
+          : <label><span>开仓逻辑</span><textarea rows={10} disabled={Boolean(workflowGeneratingStage)} value={openLogic} onChange={(event) => setOpenLogic(event.target.value)} placeholder="请用自然语言描述开仓方向、开单条件和止损止盈规则" /></label>}
       </div>
-      <div className="custom-preview-actions"><button className="button button-secondary" type="button" onClick={() => setWorkflowAiOpened(false)}>取消</button><button className="button button-primary" type="button" disabled><Sparkles size={16} />生成流程草稿（下一步接入）</button></div>
+      <div className="custom-preview-actions"><button className="button button-secondary" type="button" disabled={Boolean(workflowGeneratingStage)} onClick={() => setWorkflowAiStage(null)}>取消</button><button className="button button-primary" type="button" disabled={Boolean(workflowGeneratingStage)} onClick={() => workflowAiStage && requestWorkflowGeneration(workflowAiStage)}>{workflowGeneratingStage ? <Loader color="dark" size="xs" /> : <Sparkles size={16} />}{workflowGeneratingStage ? 'AI正在生成并检查...' : '生成流程图'}</button></div>
+    </Modal>
+    <Modal opened={Boolean(workflowOverwriteStage)} onClose={() => setWorkflowOverwriteStage(null)} title="确认覆盖现有流程" centered size="sm" closeOnClickOutside={!workflowGeneratingStage} closeOnEscape={!workflowGeneratingStage}>
+      <div className="workflow-overwrite-confirm"><p>当前{workflowOverwriteStage === 'position' ? '风控' : '开仓'}模块已经有流程图。继续生成会覆盖当前模块的全部节点和连线，但不会影响{workflowOverwriteStage === 'position' ? '开仓' : '风控'}模块。</p><small>覆盖后本地草稿也会同步更新，原流程无法自动恢复，请确认自然语言规则已经填写完整。</small><div><button className="button button-secondary" type="button" disabled={Boolean(workflowGeneratingStage)} onClick={() => setWorkflowOverwriteStage(null)}>暂不覆盖</button><button className="button button-primary" type="button" disabled={Boolean(workflowGeneratingStage)} onClick={() => { const stage = workflowOverwriteStage; setWorkflowOverwriteStage(null); if (stage) void generateWorkflowStage(stage) }}><Sparkles size={16} />确认覆盖并生成</button></div></div>
     </Modal>
     <Modal opened={strategyDetailOpened} onClose={() => setStrategyDetailOpened(false)} title="策略说明" centered size="lg" classNames={{ content: 'strategy-unavailable-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
       <div className="strategy-library-detail"><h3>{strategyTitle}</h3><p>{strategyDescription.replace(/\\n/g, '\n')}</p><button className="button button-primary" type="button" onClick={() => setStrategyDetailOpened(false)}>关闭</button></div>
     </Modal>
-    <Modal opened={Boolean(customPreview)} onClose={() => { if (saving) return; setCustomPreview(null); setPendingStrategyPayload(null) }} closeOnClickOutside={!saving} closeOnEscape={!saving} title="确认策略分析结果" centered size="xl" classNames={{ content: 'custom-preview-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
+    <Modal opened={Boolean(customPreview)} onClose={() => { if (saving) return; setCustomPreview(null); setPendingStrategyPayload(null) }} closeOnClickOutside={!saving} closeOnEscape={!saving} title="确认策略配置结果" centered size="xl" classNames={{ content: 'custom-preview-modal', header: 'strategy-delete-modal-header', title: 'strategy-delete-modal-title' }}>
       {customPreview && <div className="custom-preview-content">
-        <p className="custom-preview-lead">AI 已根据自然语言生成运行配置。请确认规则理解、指标和数据需求，确认后才会正式保存并生成 Key。</p>
+        <p className="custom-preview-lead">系统已根据您确认的开仓与风控流程图生成运行配置。请核对指标和数据需求，确认后才会正式保存并生成 Key。</p>
         <section><h3>策略理解</h3><p>{customPreview.summary || 'AI 未提供策略摘要，请重点检查下方提示词模板。'}</p></section>
         <div className="custom-preview-columns">
           {(['open', 'position'] as const).map((prefix) => {
@@ -934,7 +1109,7 @@ export function StrategyDetailPage() {
     <section className="detail-hero panel"><div><div className="detail-title"><div className="strategy-row-icon"><BrainCircuit /></div><div><span>{deployment.strategy_code === 'CUSTOM_AI_V1' ? 'CUSTOM STRATEGY' : `GAINLAB OFFICIAL · ${deployment.strategy_code}`}</span><h2>{deployment.name}</h2></div><StatusPill tone={statusTone(deployment.status)}>{statusText(deployment.status)}</StatusPill></div><p className="strategy-detail-summary">{(deployment.summary || (deployment.strategy_code === 'CUSTOM_AI_V1' ? '由自然语言规则生成的自定义 AI 策略。' : '本策略由价格行为分析引擎与 AI 共同完成候选信号识别、开仓判断和持仓风控。')).replace(/\\n/g, '\n')}</p></div><div className="detail-key"><span>MT4 / MT5 部署 Key</span><div><code>{deployment.deployment_key}</code><button type="button" onClick={copyDeploymentKey}><Copy size={15} />复制 Key</button></div><small><ShieldCheck size={14} />请勿公开分享，该 Key 可以调用您的策略。</small><Link className="detail-key-guide" to="/guide">如何设置？<ArrowRight size={14} /></Link></div></section>
     <section className="stats-grid compact-stats"><StatCard label="分析次数" value={numberText(deployment.analysis_count)} note={`累计调用 ${numberText(deployment.analysis_count)} 次`} icon={<Activity />} /><StatCard label="有效信号" value={numberText(deployment.signal_count)} note={`信号率 ${signalRate.toFixed(2)}%`} icon={<Zap />} tone="blue" /><StatCard label="历史订单" value={numberText(deployment.order_count)} note={`${strategyOrders.length} 条已同步记录`} icon={<ReceiptText />} /><StatCard label="累计盈亏" value={signedMoney(deployment.pnl)} note="净盈亏" icon={<LineChart />} tone="amber" /></section>
     <section className="detail-grid"><article className="panel"><div className="panel-heading"><div><span className="eyebrow">RUNTIME CONFIG</span><h2>运行配置</h2></div></div><div className="info-list"><Info label="绑定 MT 账号" value={deployment.mt_login || '首次连接时自动绑定'} icon={<Fingerprint />} /><Info label="开单算法" value={positionText} icon={<ShieldCheck />} /><Info label="最大持仓" value={`${deployment.max_positions}${deployment.allow_add ? '（允许加仓）' : ''}`} icon={<BarChart3 />} /></div></article><article className="panel"><div className="panel-heading"><div><span className="eyebrow">AI MODELS</span><h2>模型配置</h2></div></div><div className="model-summary"><div><BrainCircuit /><span><small>开单分析</small><strong>{deployment.open_ai_endpoint_name || deployment.open_ai_model || '未指定模型'}</strong><em>{aiModeText(deployment.open_ai_mode)}</em></span></div><div><BrainCircuit /><span><small>持仓风控</small><strong>{deployment.position_ai_endpoint_name || deployment.position_ai_model || '未指定模型'}</strong><em>{aiModeText(deployment.position_ai_mode)}</em></span></div></div><div className="usage-progress"><div><span>累计 AI Token</span><strong>{tokenText(deployment.official_tokens_used + deployment.custom_tokens_used)}</strong></div><i><b style={{ width: deployment.analysis_count ? '100%' : '0%' }} /></i></div></article></section>
-    {deployment.strategy_code === 'CUSTOM_AI_V1' && <section className="panel custom-strategy-detail"><div className="panel-heading"><div><span className="eyebrow">CUSTOM RULES</span><h2>自定义策略逻辑</h2></div></div><div><article><span>开仓逻辑</span><p>{deployment.open_logic || '-'}</p><small>指标：{deployment.open_indicators?.length ? deployment.open_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线数据'}</small></article><article><span>持仓风控逻辑</span><p>{deployment.position_logic || '-'}</p><small>指标：{deployment.position_indicators?.length ? deployment.position_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线与持仓数据'}</small></article></div></section>}
+    {deployment.strategy_code === 'CUSTOM_AI_V1' && <section className="panel custom-strategy-detail"><div className="panel-heading"><div><span className="eyebrow">CUSTOM RULES</span><h2>自定义策略逻辑</h2></div></div>{deployment.workflow?.open && deployment.workflow?.position && Array.isArray(deployment.workflow.open.nodes) && Array.isArray(deployment.workflow.position.nodes) ? <div className="strategy-workflow-readonly"><div className="strategy-workflow-stage"><h3>开仓流程</h3><Suspense fallback={<div className="loading-block">正在加载开仓流程...</div>}><WorkflowEditor value={deployment.workflow} fixedStage="open" readOnly /></Suspense></div><div className="strategy-workflow-stage"><h3>风控流程</h3><Suspense fallback={<div className="loading-block">正在加载风控流程...</div>}><WorkflowEditor value={deployment.workflow} fixedStage="position" readOnly /></Suspense></div></div> : <div><article><span>开仓逻辑</span><p>{deployment.open_logic || '-'}</p><small>指标：{deployment.open_indicators?.length ? deployment.open_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线数据'}</small></article><article><span>持仓风控逻辑</span><p>{deployment.position_logic || '-'}</p><small>指标：{deployment.position_indicators?.length ? deployment.position_indicators.map((item) => item.alias || item.name).join('、') : '仅使用 K 线与持仓数据'}</small></article></div>}</section>}
     <section className="panel"><div className="panel-heading"><div><span className="eyebrow">LATEST ORDERS</span><h2>最近订单</h2></div><Link to="/app/orders"><TextLink>查看全部</TextLink></Link></div><RecentOrders orders={strategyOrders.slice(0, 5)} /></section>
   </>
 }

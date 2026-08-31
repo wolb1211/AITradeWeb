@@ -1,5 +1,6 @@
 .workflow-editor-shell { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .workflow-editor-toolbar { min-height: 58px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+.workflow-stage-caption { color: var(--text); font-size: 13px; }
 .workflow-stage-tabs { display: flex; padding: 3px; gap: 3px; border-radius: 10px; background: var(--surface); }
 .workflow-stage-tabs button, .workflow-ai-generate { min-height: 34px; padding: 0 16px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; font-size: 13px; }
 .workflow-toolbar-actions { display: flex; align-items: center; gap: 8px; }
@@ -92,16 +93,19 @@
 .workflow-add-menu > button:hover { background: var(--surface); }
 .workflow-add-menu > button > span { display: flex; flex-direction: column; gap: 3px; }
 .workflow-add-menu > button small { color: var(--muted); font-size: 11px; }
-.workflow-validation-dialog { position: absolute; z-index: 25; top: 50%; left: 50%; width: min(440px, calc(100% - 32px)); padding: 18px; color: var(--text); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 24px 70px rgb(0 0 0 / 35%); transform: translate(-50%, -50%); }
-.workflow-validation-dialog > div { display: flex; align-items: center; gap: 11px; }
-.workflow-validation-dialog > div > span { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.workflow-validation-dialog { position: absolute; z-index: 25; top: 50%; left: 50%; width: min(440px, calc(100% - 32px)); padding: 24px; color: var(--text); border: 1px solid color-mix(in srgb, var(--line) 78%, var(--green)); border-radius: 16px; background: var(--panel); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform: translate(-50%, -50%); }
+.workflow-validation-dialog > div { display: flex; align-items: flex-start; gap: 14px; }
+.workflow-validation-dialog > div > span { flex: 0 0 auto; width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 .workflow-validation-dialog > div > span.success { color: #36b37e; background: rgb(54 179 126 / 12%); }
 .workflow-validation-dialog > div > span.error { color: #ef6b73; background: rgb(239 107 115 / 12%); }
-.workflow-validation-dialog > div > div { display: flex; flex: 1; flex-direction: column; gap: 3px; }
-.workflow-validation-dialog > div small { color: var(--muted); }
-.workflow-validation-dialog > div > button { padding: 4px; display: inline-flex; color: var(--muted); border: 0; background: none; cursor: pointer; }
-.workflow-validation-dialog ul { max-height: 240px; margin: 15px 0; padding: 0; overflow: auto; list-style: none; }
-.workflow-validation-dialog li { padding: 9px 0; display: flex; gap: 9px; border-top: 1px solid var(--line); font-size: 12px; }
+.workflow-validation-dialog > div > div { display: flex; flex: 1; flex-direction: column; gap: 6px; padding-top: 1px; }
+.workflow-validation-dialog > div strong { font-size: 15px; line-height: 1.35; }
+.workflow-validation-dialog > div small { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.workflow-validation-dialog > div > button { flex: 0 0 auto; padding: 5px; display: inline-flex; color: var(--muted); border: 0; border-radius: 7px; background: none; cursor: pointer; }
+.workflow-validation-dialog > div > button:hover { color: var(--text); background: var(--surface); }
+.workflow-validation-dialog ul { max-height: 240px; margin: 20px 0 0; padding: 4px 12px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--surface) 65%, transparent); list-style: none; }
+.workflow-validation-dialog li { padding: 11px 0; display: flex; gap: 10px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; }
+.workflow-validation-dialog li:first-child { border-top: 0; }
 .workflow-validation-dialog li b { color: #ef6b73; }
-.workflow-validation-dialog > .button { width: 100%; justify-content: center; }
+.workflow-validation-dialog > .button { width: 100%; min-height: 42px; margin-top: 22px; justify-content: center; font-size: 13px; }
 @media (max-width: 900px) { .workflow-editor-body { grid-template-columns: 1fr; } .workflow-config-panel { border-top: 1px solid var(--line); border-left: 0; } .workflow-canvas { min-height: 480px; } }
