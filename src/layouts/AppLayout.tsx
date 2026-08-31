@@ -29,6 +29,8 @@ const titles: Record<string, string> = {
   '/app': '账户概览',
   '/app/strategies': '我的策略',
   '/app/strategies/new': '创建策略',
+  '/app/strategies/new/library': '从策略库创建',
+  '/app/strategies/new/custom': '自定义AI策略',
   '/app/orders': '历史订单',
   '/app/wallet': 'GL AI余额',
   '/app/usage': 'AI 使用记录',
