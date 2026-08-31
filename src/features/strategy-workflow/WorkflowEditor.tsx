@@ -93,7 +93,9 @@ async function layoutStage(workflow: CustomStrategyWorkflow, stageName: Workflow
     edges: stage.edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   })
   const positions = new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
-  enforceBranchSides(stage, positions)
+  // ELK already avoids collisions for nested branches. The old post-layout
+  // symmetry pass could shift descendant subtrees onto each other in complex
+  // workflows, so keep the collision-free ELK coordinates here.
   return positions
 }
 
