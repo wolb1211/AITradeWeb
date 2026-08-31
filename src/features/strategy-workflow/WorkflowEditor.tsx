@@ -12,6 +12,7 @@ import {
   type Edge as FlowEdge,
   type Node as FlowNode,
   type NodeProps,
+  type NodeChange,
 } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Bot, Check, GitBranch, Image, Play, Plus, ShieldCheck, Sparkles, X } from 'lucide-react'
@@ -255,7 +256,16 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, readOnly 
       stroke: edge.source_handle === 'yes' ? 'rgba(61, 190, 139, .72)' : edge.source_handle === 'no' ? 'rgba(235, 105, 116, .68)' : undefined,
     },
   })), [stageName, value])
-  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} elementsSelectable fitView fitViewOptions={{ padding: 0.35, maxZoom: 1 }} onInit={(instance) => { window.setTimeout(() => instance.fitView({ padding: 0.35, duration: 280, maxZoom: 1 }), 600) }} proOptions={{ hideAttribution: true }}>
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const moved = changes.filter((change): change is NodeChange & { type: 'position'; position?: { x: number; y: number } } => change.type === 'position' && Boolean(change.position))
+    if (!moved.length) return
+    setPositions((current) => {
+      const next = new Map(current)
+      moved.forEach((change) => { if (change.position) next.set(change.id, change.position) })
+      return next
+    })
+  }, [])
+  return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} nodesDraggable={!readOnly} onNodesChange={handleNodesChange} elementsSelectable fitView fitViewOptions={{ padding: 0.35, maxZoom: 1 }} onInit={(instance) => { window.setTimeout(() => instance.fitView({ padding: 0.35, duration: 280, maxZoom: 1 }), 600) }} proOptions={{ hideAttribution: true }}>
     <Background gap={22} size={1} />
     <Controls showInteractive={false} />
   </ReactFlow>
