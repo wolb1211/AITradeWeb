@@ -59,7 +59,11 @@ export function describeCondition(condition: WorkflowCondition, nodes: WorkflowN
 
 export function describeOperand(operand?: WorkflowOperand, nodes: WorkflowNode[] = []): string {
   if (!operand) return '未设置'
-  if (operand.kind === 'constant') return formatNumber(operand.value)
+  if (operand.kind === 'constant') {
+    if (operand.value === 'buy') return '多单'
+    if (operand.value === 'sell') return '空单'
+    return formatNumber(operand.value)
+  }
   if (operand.kind === 'vision_result') {
     const source = nodes.find((node) => node.id === operand.source_node_id && node.type === 'vision_extract')
     return source?.output?.label || '截图识别结果'
