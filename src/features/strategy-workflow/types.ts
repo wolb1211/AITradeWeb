@@ -64,13 +64,16 @@ export type WorkflowCondition = {
 }
 
 export type WorkflowPriceTarget = {
-  kind: 'fixed' | 'entry_price' | 'current_price' | 'indicator' | 'recent_high' | 'recent_low' | 'atr_offset'
+  kind: 'fixed' | 'entry_price' | 'current_price' | 'indicator' | 'recent_high' | 'recent_low' | 'atr_offset' | 'formula'
   value?: number
   indicator?: string
   lookback?: number
   operation?: 'none' | 'add' | 'subtract'
   offset_value?: number
   atr_multiplier?: number
+  formula_base?: 'current_price' | 'entry_price' | 'sl' | 'tp' | 'recent_high' | 'recent_low'
+  adjustment_kind?: 'fixed' | 'atr'
+  adjustment_value?: number
 }
 
 export type WorkflowVolume = {

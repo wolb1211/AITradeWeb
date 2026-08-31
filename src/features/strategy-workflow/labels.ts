@@ -10,7 +10,7 @@ const componentNames: Record<string, string> = {
 const operandNames: Record<string, string> = {
   bid: 'Bid', ask: 'Ask', open: '开盘价', high: '最高价', low: '最低价', close: '收盘价',
   side: '持仓方向', profit: '当前盈亏', open_price: '开仓价', current_price: '当前价', sl: '止损价', tp: '止盈价',
-  volume: '持仓手数', favorable_move: '有利移动距离', stop_distance: '当前价格与止损的距离', price_open_distance: '最新价与开仓价距离', price_sl_distance: '最新价与止损价距离', price_tp_distance: '最新价与止盈价距离', recent_low: '近期最低价', recent_high: '近期最高价',
+  volume: '持仓手数', favorable_move: '有利移动距离', stop_distance: '当前价格与止损的距离', price_open_distance: '最新价 - 开仓价', price_sl_distance: '最新价 - 止损价', price_tp_distance: '最新价 - 止盈价', recent_low: '近期最低价', recent_high: '近期最高价',
 }
 const operatorNames: Record<string, string> = { gt: '大于', gte: '大于等于', lt: '小于', lte: '小于等于', eq: '等于', neq: '不等于' }
 const patternNames: Record<string, string> = {
@@ -96,6 +96,13 @@ function describeVolume(volume?: { mode: string; value: number }) {
 
 function describeTarget(target?: WorkflowPriceTarget) {
   if (!target) return '未设置价格'
+  if (target.kind === 'formula') {
+    const baseNames: Record<string, string> = { current_price: '最新价', entry_price: '开仓价', sl: '原止损价', tp: '原止盈价', recent_low: '近期最低价', recent_high: '近期最高价' }
+    const base = baseNames[target.formula_base || 'current_price'] || '最新价'
+    const op = target.operation === 'add' ? '+' : target.operation === 'subtract' ? '-' : ''
+    const value = formatNumber(target.adjustment_value ?? 0)
+    return `${base} ${op} ${target.adjustment_kind === 'atr' ? `${value} × ATR` : value}`.trim()
+  }
   if (target.kind === 'entry_price') return target.operation === 'add' ? `开仓价 + ${formatNumber(target.offset_value || 0)}` : target.operation === 'subtract' ? `开仓价 - ${formatNumber(target.offset_value || 0)}` : '开仓价'
   if (target.kind === 'current_price') return '当前价'
   if (target.kind === 'recent_low') return `最近${target.lookback || 5}根最低价`

@@ -94,6 +94,13 @@ async function layoutStage(workflow: CustomStrategyWorkflow, stageName: Workflow
     edges: stage.edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   })
   const positions = new Map((graph.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]))
+  // Keep positions explicitly saved by the user. ELK is only the fallback
+  // for new nodes that do not have a stored position yet.
+  stage.nodes.forEach((node) => {
+    if (node.position && Number.isFinite(node.position.x) && Number.isFinite(node.position.y)) {
+      positions.set(node.id, node.position)
+    }
+  })
   // ELK already avoids collisions for nested branches. The old post-layout
   // symmetry pass could shift descendant subtrees onto each other in complex
   // workflows, so keep the collision-free ELK coordinates here.
@@ -195,25 +202,35 @@ function conditionReferencesVision(node: WorkflowNode, sourceId: string): boolea
   return visit(node.condition)
 }
 
-function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, readOnly }: {
+function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, onPositionChange, readOnly }: {
   value: CustomStrategyWorkflow
   stageName: WorkflowStageName
   selectedId: string
   onSelect: (id: string) => void
   onAdd: (id: string, branch: 'next' | 'yes' | 'no') => void
+  onPositionChange?: (positions: Array<{ id: string; position: { x: number; y: number } }>) => void
   readOnly?: boolean
 }) {
   const { fitView } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(new Map())
+  const [layoutVersion, setLayoutVersion] = useState(0)
+  // Editing a node changes the workflow object, but should not reset the
+  // canvas. Only topology changes (nodes/edges added or removed) require a
+  // fresh layout and an initial fit-to-view.
+  const topologyKey = useMemo(() => {
+    const stage = value[stageName]
+    return `${stage.nodes.map((node) => node.id).join(',')}|${stage.edges.map((edge) => `${edge.source}>${edge.target}:${edge.source_handle}`).join(',')}`
+  }, [stageName, value])
   useEffect(() => {
     let active = true
     void layoutStage(value, stageName).then((next) => {
       if (!active) return
       setPositions(next)
+      setLayoutVersion((version) => version + 1)
     })
     return () => { active = false }
-  }, [fitView, stageName, value])
+  }, [stageName, topologyKey])
   useEffect(() => {
     if (!nodesInitialized || positions.size === 0) return
     // React Flow updates its internal node bounds one render after our ELK
@@ -229,7 +246,7 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, readOnly 
       window.cancelAnimationFrame(frame)
       window.clearTimeout(timer)
     }
-  }, [fitView, nodesInitialized, positions])
+  }, [fitView, nodesInitialized, layoutVersion])
   const nodes = useMemo<FlowNode<EditorNodeData>[]>(() => value[stageName].nodes.map((node) => ({
     id: node.id,
     type: 'strategy',
@@ -264,7 +281,8 @@ function EditorCanvas({ value, stageName, selectedId, onSelect, onAdd, readOnly 
       moved.forEach((change) => { if (change.position) next.set(change.id, change.position) })
       return next
     })
-  }, [])
+    onPositionChange?.(moved.flatMap((change) => change.position ? [{ id: change.id, position: change.position }] : []))
+  }, [onPositionChange])
   return <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} nodesConnectable={false} nodesDraggable={!readOnly} onNodesChange={handleNodesChange} elementsSelectable fitView fitViewOptions={{ padding: 0.35, maxZoom: 1 }} onInit={(instance) => { window.setTimeout(() => instance.fitView({ padding: 0.35, duration: 280, maxZoom: 1 }), 600) }} proOptions={{ hideAttribution: true }}>
     <Background gap={22} size={1} />
     <Controls showInteractive={false} />
@@ -285,6 +303,7 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus,
   const [addTarget, setAddTarget] = useState<{ source: string; branch: 'next' | 'yes' | 'no' } | null>(null)
   const [validationIssues, setValidationIssues] = useState<WorkflowValidationIssue[] | null>(null)
   const [indicatorCatalog, setIndicatorCatalog] = useState<IndicatorCatalogItem[]>([])
+  const [maximized, setMaximized] = useState(false)
   const selected = value[stageName].nodes.find((node) => node.id === selectedId)
   const availableVisionNodes = selected ? upstreamVisionNodes(value[stageName], selected.id) : []
   useEffect(() => { setSelectedId(value[stageName].entry_node_id) }, [stageName])
@@ -396,17 +415,17 @@ export function WorkflowEditor({ value, onChange, onGenerateWithAi, draftStatus,
     setSelectedId(id)
     setAddTarget(null)
   }, [addTarget, onChange, stageName, value])
-  return <div className={`workflow-editor-shell${readOnly ? ' workflow-editor-readonly' : ''}`}>
+  return <div className={`workflow-editor-shell${readOnly ? ' workflow-editor-readonly' : ''}${maximized ? ' workflow-editor-maximized' : ''}`}>
     <div className="workflow-editor-toolbar">
       {!fixedStage && <div className="workflow-stage-tabs">
         <button type="button" className={stageName === 'open' ? 'active' : ''} onClick={() => setActiveStage('open')}>开仓流程</button>
         <button type="button" className={stageName === 'position' ? 'active' : ''} onClick={() => setActiveStage('position')}>持仓风控</button>
       </div>}
       {fixedStage && <strong className="workflow-stage-caption">{fixedStage === 'open' ? '开仓流程图' : '持仓风控流程图'}</strong>}
-      {!readOnly && <div className="workflow-toolbar-actions">{draftStatus && <span className="workflow-draft-status"><Check size={13} />{draftStatus}</span>}<button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value).filter((issue) => !fixedStage || issue.stage === fixedStage))}><Check size={16} />检查{fixedStage === 'open' ? '开仓' : fixedStage === 'position' ? '风控' : ''}流程</button><button className="workflow-ai-generate" type="button" onClick={() => onGenerateWithAi?.(stageName)}><Sparkles size={16} />AI帮我生成</button></div>}
+      {!readOnly && <div className="workflow-toolbar-actions">{draftStatus && <span className="workflow-draft-status"><Check size={13} />{draftStatus}</span>}<button type="button" onClick={() => setValidationIssues(validateWorkflowDraft(value).filter((issue) => !fixedStage || issue.stage === fixedStage))}><Check size={16} />检查{fixedStage === 'open' ? '开仓' : fixedStage === 'position' ? '风控' : ''}流程</button><button className="workflow-ai-generate" type="button" onClick={() => onGenerateWithAi?.(stageName)}><Sparkles size={16} />AI帮我生成</button><button type="button" onClick={() => setMaximized((value) => !value)}>{maximized ? "退出最大化" : "最大化编辑"}</button></div>}
     </div>
     <div className="workflow-editor-body">
-      <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} readOnly={readOnly} /></ReactFlowProvider></div>
+       <div className="workflow-canvas"><ReactFlowProvider><EditorCanvas value={value} stageName={stageName} selectedId={selectedId} onSelect={setSelectedId} onAdd={addNext} onPositionChange={(changes) => onChange?.({ ...value, [stageName]: { ...value[stageName], nodes: value[stageName].nodes.map((node) => changes.find((change) => change.id === node.id) ? { ...node, position: changes.find((change) => change.id === node.id)!.position } : node) } })} readOnly={readOnly} /></ReactFlowProvider></div>
       {!readOnly && <NodeConfigPanel node={selected} nodes={value[stageName].nodes} visionSources={availableVisionNodes} indicatorCatalog={indicatorCatalog} stage={stageName} requirements={value[stageName].data_requirements} onChange={updateSelected} onRequirementsChange={updateRequirements} onDelete={deleteSelected} />}
     </div>
     {addTarget && <div className="workflow-add-menu" role="dialog" aria-label="添加流程节点">
