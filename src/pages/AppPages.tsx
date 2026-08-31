@@ -434,7 +434,9 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     () => strategySettingsDraftKey(draftOwnerId, `${strategySource}-${deployment?.id || 'new'}`),
     [deployment?.id, draftOwnerId, strategySource],
   )
-  const initialSettingsDraft = useMemo(() => loadStrategySettingsDraft(settingsDraftStorageKey), [settingsDraftStorageKey])
+  // Drafts are only restored for a new strategy. Editing an existing
+  // strategy must always start from the persisted server configuration.
+  const initialSettingsDraft = useMemo(() => editing ? null : loadStrategySettingsDraft(settingsDraftStorageKey), [editing, settingsDraftStorageKey])
   const [sizeMode, setSizeMode] = useState<'fixed' | 'risk'>(deployment?.position_size_mode === 'risk' ? 'risk' : 'fixed')
   const [strategyName, setStrategyName] = useState(deployment?.name || (strategySource === 'custom' ? '我的自定义AI策略' : 'GL 趋势自动分析策略'))
   const [strategyStatus, setStrategyStatus] = useState(deployment?.status || 'active')
@@ -467,13 +469,21 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const [customPreview, setCustomPreview] = useState<CustomStrategyPreview | null>(null)
   const [pendingStrategyPayload, setPendingStrategyPayload] = useState<Record<string, unknown> | null>(null)
   const workflowDraftStorageKey = useMemo(() => workflowDraftKey(draftOwnerId, deployment?.id || 'new'), [deployment?.id, draftOwnerId])
-  const initialWorkflowDraft = useMemo(() => loadWorkflowDraft(workflowDraftStorageKey), [workflowDraftStorageKey])
+  const initialWorkflowDraft = useMemo(() => editing ? null : loadWorkflowDraft(workflowDraftStorageKey), [editing, workflowDraftStorageKey])
+  useEffect(() => {
+    if (!editing) return
+    // Discard stale drafts as soon as an existing strategy is opened. Any
+    // subsequent edits are written back by the normal debounced draft saver.
+    clearStrategySettingsDraft(settingsDraftStorageKey)
+    clearWorkflowDraft(workflowDraftStorageKey)
+  }, [editing, settingsDraftStorageKey, workflowDraftStorageKey])
   // Prefer an unsaved local draft, then the persisted workflow from the API;
   // only brand-new strategies should start with the blank default graph.
   const [workflow, setWorkflow] = useState(() => {
     const defaultWorkflow = createDefaultWorkflow()
     let baseWorkflow: CustomStrategyWorkflow
-    if (!deployment?.workflow) baseWorkflow = initialWorkflowDraft?.workflow || defaultWorkflow
+    if (editing) baseWorkflow = deployment?.workflow || defaultWorkflow
+    else if (!deployment?.workflow) baseWorkflow = initialWorkflowDraft?.workflow || defaultWorkflow
     else {
       const persisted = deployment.workflow
       const draftTime = initialWorkflowDraft?.saved_at ? Date.parse(initialWorkflowDraft.saved_at) : 0
@@ -522,6 +532,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   })
   const settingsDraftRef = useRef<StrategySettingsDraftValue | null>(null)
   const settingsDraftEnabledRef = useRef(true)
+  const settingsInitializedRef = useRef(!editing)
   useEffect(() => {
     const settings = initialSettingsDraft?.settings
     if (!settings) return
@@ -552,6 +563,13 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       allowAdd,
     }
     settingsDraftRef.current = settings
+    // Do not recreate a draft from the persisted values when opening an
+    // existing strategy. The first subsequent user change will enable the
+    // normal draft saver.
+    if (editing && !settingsInitializedRef.current) {
+      settingsInitializedRef.current = true
+      return
+    }
     const timer = window.setTimeout(() => {
       if (settingsDraftEnabledRef.current) saveStrategySettingsDraft(settingsDraftStorageKey, settings)
     }, 400)
@@ -667,8 +685,10 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const customLogicChanged = !editing || !deployment
     || openLogic.trim() !== String(deployment.open_logic || '').trim()
     || positionLogic.trim() !== String(deployment.position_logic || '').trim()
+  const hasVisualWorkflow = strategySource === 'custom'
+    && (workflow.open.nodes.length > 1 || workflow.position.nodes.length > 1)
   const customNeedsCompilation = strategySource === 'custom' && (
-    customLogicChanged || Number(deployment?.rule_engine_version || 0) < 1
+    !hasVisualWorkflow && (customLogicChanged || Number(deployment?.rule_engine_version || 0) < 1)
   )
   // Legacy text-based strategies have no visual workflow. Do not persist the
   // editor's placeholder graph unless the user explicitly changes it (or this
@@ -700,7 +720,24 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (saving) return
+    // A draft can be restored from localStorage before the debounced React
+    // state write runs. Prefer the in-memory graph, but fall back to the
+    // persisted draft when it contains the actual visual workflow.
+    const draftWorkflow = loadWorkflowDraft(workflowDraftStorageKey)?.workflow
+    const refWorkflow = workflowRef.current
+    const refHasVisual = refWorkflow.open.nodes.length > 1 || refWorkflow.position.nodes.length > 1
+    const draftHasVisual = Boolean(draftWorkflow && (draftWorkflow.open.nodes.length > 1 || draftWorkflow.position.nodes.length > 1))
+    const currentWorkflow = !refHasVisual && draftHasVisual ? draftWorkflow! : refWorkflow
+    const currentHasVisualWorkflow = strategySource === 'custom'
+      && (currentWorkflow.open.nodes.length > 1 || currentWorkflow.position.nodes.length > 1)
     if (strategySource === 'custom') {
+      // Legacy text-only strategies remain runnable, but once opened in the
+      // editor they must be converted to a visual workflow before saving so
+      // every edited strategy has one unambiguous source of truth.
+      if (!currentHasVisualWorkflow) {
+        notifications.show({ title: '请先生成流程图', message: '该策略尚未生成流程图，请在开仓和风控模块点击“AI帮我生成”，确认流程后再保存。', color: 'red', autoClose: 6000 })
+        return
+      }
       const missingVision = [
         { label: '开单分析 AI', dataType: workflow.open.data_requirements.data_type, ai: openAi },
         { label: '持仓风控 AI', dataType: workflow.position.data_requirements.data_type, ai: positionAi },
@@ -736,13 +773,23 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       risk_percent: Number(riskPercent),
       max_positions: Number(maxPositions),
       allow_add: allowAdd,
-      open_logic: strategySource === 'custom' ? openLogic.trim() : '',
-      position_logic: strategySource === 'custom' ? positionLogic.trim() : '',
-      workflow: shouldPersistWorkflow ? workflow : undefined,
-      open_data_type: strategySource === 'custom' ? workflow.open.data_requirements.data_type : openDataType,
-      open_kline_count: strategySource === 'custom' ? workflow.open.data_requirements.kline_count : Number(openKlineCount),
-      position_data_type: strategySource === 'custom' ? workflow.position.data_requirements.data_type : positionDataType,
-      position_kline_count: strategySource === 'custom' ? workflow.position.data_requirements.kline_count : Number(positionKlineCount),
+       // Visual workflows are the source of truth. Keep a short textual
+       // marker for the legacy API validation when users leave the optional
+       // natural-language fields empty.
+       open_logic: strategySource === 'custom' ? (openLogic.trim() || (workflow.open.nodes.length > 1 ? '按开仓流程图执行' : '')) : '',
+       position_logic: strategySource === 'custom' ? (positionLogic.trim() || (workflow.position.nodes.length > 1 ? '按风控流程图执行' : '')) : '',
+      // Always read the latest graph from the ref. React state updates are
+      // asynchronous, so clicking Save immediately after editing a node can
+      // otherwise submit the previous graph (or the blank placeholder).
+      workflow: strategySource === 'custom' ? currentWorkflow : undefined,
+      open_data_type: strategySource === 'custom' ? currentWorkflow.open.data_requirements.data_type : openDataType,
+      open_kline_count: strategySource === 'custom' ? currentWorkflow.open.data_requirements.kline_count : Number(openKlineCount),
+      position_data_type: strategySource === 'custom' ? currentWorkflow.position.data_requirements.data_type : positionDataType,
+      position_kline_count: strategySource === 'custom' ? currentWorkflow.position.data_requirements.kline_count : Number(positionKlineCount),
+    }
+    if (strategySource === 'custom' && currentHasVisualWorkflow) {
+      await saveStrategy(payload)
+      return
     }
     if (strategySource === 'custom') {
       if (!customNeedsCompilation) {
@@ -873,7 +920,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     </section>
     {strategySource === 'official' && <section className="panel form-section strategy-ai-section"><div className="form-section-title"><span>03</span><div><h2>AI 模型</h2><p>开单和持仓风控可以分别选择 GL 提供的模型或配置自己的 AI 接口。带有图片图标的模型支持截图识别。</p></div></div><div className="form-grid two-cards"><AiSelect title="开单分析 AI" value={openAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.open_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setOpenAi} /><AiSelect title="持仓风控 AI" value={positionAi} options={aiModelOptions} defaultEndpointId={libraryStrategy?.position_ai_endpoint_id || ''} loading={aiModelsLoading} onShowPricing={() => setPricingOpened(true)} onShowCustomHelp={() => setCustomAiHelpOpened(true)} onChange={setPositionAi} /></div></section>}
     <section className="panel form-section strategy-risk-section"><div className="form-section-title"><span>04</span><div><h2>{strategySource === 'custom' ? '仓位与风险设置' : '仓位和风险'}</h2><p>服务端会在返回订单前按照此处规则计算最终手数。</p></div></div><div className="segmented"><button type="button" className={sizeMode === 'fixed' ? 'active' : ''} onClick={() => setSizeMode('fixed')}>固定手数</button><button type="button" className={sizeMode === 'risk' ? 'active' : ''} onClick={() => setSizeMode('risk')}>以损定仓</button></div>{sizeMode === 'fixed' ? <div className="form-grid"><label><span>每次开单手数</span><input type="number" min="0.01" value={fixedVolume} onChange={(event) => setFixedVolume(event.target.value)} step="0.01" /></label><label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div> : <><div className="form-grid risk-mode-grid"><label><span>风险计算方式</span><Select className="app-mantine-select" value={riskBaseMode} onChange={(value) => setRiskBaseMode(value === 'balance_percent' ? 'balance_percent' : 'fixed_loss')} data={[{ value: 'fixed_loss', label: '固定止损金额' }, { value: 'balance_percent', label: '余额比例止损' }]} allowDeselect={false} /></label>{riskBaseMode === 'fixed_loss' ? <label><span>每单最大风险金额</span><div className="suffix-input"><input type="number" min="0" value={riskAmount} onChange={(event) => setRiskAmount(event.target.value)} /><span>USD</span></div></label> : <label><span>单笔风险占余额比例</span><div className="suffix-input"><input type="number" min="0.01" step="0.1" value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} /><span>%</span></div></label>}<label><span>最大持仓数量</span><input type="number" min="1" value={maxPositions} onChange={(event) => setMaxPositions(event.target.value)} /></label></div><p className="risk-mode-note">以损定仓需要策略返回有效止损价；没有止损价时，服务端会回退到固定手数或拒绝下单。</p></>}<label className="toggle-row"><div><strong>允许策略加仓</strong><small>仅在策略返回明确加仓动作且未超过持仓上限时执行</small></div><input type="checkbox" checked={allowAdd} onChange={(event) => setAllowAdd(event.target.checked)} /></label></section>
-    <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => editing && onCancel ? onCancel() : navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')}>取消</button><button className="button button-primary" type="submit" disabled={saving || aiModelsLoading || (strategySource === 'official' && !libraryStrategy) || (strategySource === 'custom' && (openLogic.trim().length < 5 || positionLogic.trim().length < 5))}>{saving ? customNeedsCompilation ? 'AI 正在分析策略...' : editing ? '正在保存...' : '正在创建...' : customNeedsCompilation ? '生成策略配置' : editing ? '保存修改' : '创建并生成 Key'}{!saving && <ArrowRight size={17} />}</button></div>
+    <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => editing && onCancel ? onCancel() : navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')}>取消</button><button className="button button-primary" type="submit" disabled={saving || aiModelsLoading || (strategySource === 'official' && !libraryStrategy) || false}>{saving ? customNeedsCompilation ? 'AI 正在分析策略...' : editing ? '正在保存...' : '正在创建...' : customNeedsCompilation ? '生成策略配置' : editing ? '保存修改' : '创建并生成 Key'}{!saving && <ArrowRight size={17} />}</button></div>
     <Modal opened={Boolean(workflowAiStage)} onClose={() => { if (!workflowGeneratingStage) setWorkflowAiStage(null) }} closeOnClickOutside={!workflowGeneratingStage} closeOnEscape={!workflowGeneratingStage} title={`AI帮我生成${workflowAiStage === 'position' ? '风控' : '开仓'}流程`} centered size="lg">
       <div className="workflow-generation-note"><Sparkles size={15} /><span>流程图由平台使用 qwen-plus 生成，不会扣除您的 GL AI 余额；当前模块选择的 AI 仅用于策略运行。</span></div>
       <div className="custom-rule-grid single">
