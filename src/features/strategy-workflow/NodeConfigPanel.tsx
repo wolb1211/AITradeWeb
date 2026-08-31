@@ -178,7 +178,10 @@ function IndicatorFields({ value, onChange, title, catalog, compatibleGroups, co
 }
 
 function FormSelect({ value, data, onChange }: { value: string; data: Array<[string, string]>; onChange: (value: string) => void }) {
-  return <Select className="workflow-mantine-select" value={value} data={data.map(([itemValue, label]) => ({ value: itemValue, label }))} onChange={(next) => next !== null && onChange(next)} allowDeselect={false} searchable={data.length > 12} comboboxProps={{ withinPortal: true, zIndex: 1200 }} />
+  const options = data.some(([itemValue]) => itemValue === 'side') && !data.some(([itemValue]) => itemValue === 'stop_distance')
+    ? [...data, ['stop_distance', '当前价格与止损的距离'] as [string, string]]
+    : data
+  return <Select className="workflow-mantine-select" value={value} data={options.map(([itemValue, label]) => ({ value: itemValue, label }))} onChange={(next) => next !== null && onChange(next)} allowDeselect={false} searchable={options.length > 12} comboboxProps={{ withinPortal: true, zIndex: 1200 }} />
 }
 
 function OperandFields({ value, onChange, title, catalog, allowConstant = true, allowedKinds, compatibleGroups, conditionKind, positionSideConstant = false }: { value: WorkflowOperand; onChange: (value: WorkflowOperand) => void; title: string; catalog: IndicatorCatalogItem[]; allowConstant?: boolean; allowedKinds?: string[]; compatibleGroups?: string[]; conditionKind?: string; positionSideConstant?: boolean }) {
