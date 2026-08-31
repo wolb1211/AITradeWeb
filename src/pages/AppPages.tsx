@@ -491,6 +491,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     }
   })
   const [workflowDraftDirty, setWorkflowDraftDirty] = useState(false)
+  const [workflowTouched, setWorkflowTouched] = useState(false)
   const [workflowDraftSavedAt, setWorkflowDraftSavedAt] = useState(initialWorkflowDraft?.saved_at || '')
   const workflowRef = useRef(workflow)
   const workflowDraftDirtyRef = useRef(false)
@@ -591,6 +592,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const updateWorkflow = (next: typeof workflow) => {
     workflowRef.current = next
     workflowDraftDirtyRef.current = true
+    setWorkflowTouched(true)
     setWorkflow(next)
     setWorkflowDraftDirty(true)
   }
@@ -668,6 +670,11 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const customNeedsCompilation = strategySource === 'custom' && (
     customLogicChanged || Number(deployment?.rule_engine_version || 0) < 1
   )
+  // Legacy text-based strategies have no visual workflow. Do not persist the
+  // editor's placeholder graph unless the user explicitly changes it (or this
+  // is a new strategy), otherwise simply editing an old strategy would replace
+  // its rules with the default graph.
+  const shouldPersistWorkflow = strategySource === 'custom' && (!deployment || Boolean(deployment.workflow) || workflowTouched)
   const saveStrategy = async (payload: Record<string, unknown>, compiledConfig?: CustomStrategyPreview) => {
     setSaving(true)
     try {
@@ -731,7 +738,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       allow_add: allowAdd,
       open_logic: strategySource === 'custom' ? openLogic.trim() : '',
       position_logic: strategySource === 'custom' ? positionLogic.trim() : '',
-      workflow: strategySource === 'custom' ? workflow : undefined,
+      workflow: shouldPersistWorkflow ? workflow : undefined,
       open_data_type: strategySource === 'custom' ? workflow.open.data_requirements.data_type : openDataType,
       open_kline_count: strategySource === 'custom' ? workflow.open.data_requirements.kline_count : Number(openKlineCount),
       position_data_type: strategySource === 'custom' ? workflow.position.data_requirements.data_type : positionDataType,
