@@ -2,7 +2,7 @@ import type { CustomStrategyWorkflow, WorkflowNode, WorkflowStage } from './type
 import { pruneWorkflowStage } from './graph'
 
 type WorkflowDraft = {
-  schema_version: 1
+  schema_version: 2
   saved_at: string
   workflow: CustomStrategyWorkflow
 }
@@ -84,7 +84,7 @@ export function workflowDraftKey(userId: string, deploymentId = 'new') {
 export function loadWorkflowDraft(key: string): WorkflowDraft | null {
   try {
     const value = JSON.parse(localStorage.getItem(key) || 'null') as WorkflowDraft | null
-    if (!value || value.schema_version !== 1 || value.workflow?.schema_version !== 1) return null
+    if (!value || value.schema_version !== 2 || value.workflow?.schema_version !== 1) return null
     if (!value.workflow.open || !value.workflow.position) return null
     return {
       ...value,
@@ -100,7 +100,7 @@ export function loadWorkflowDraft(key: string): WorkflowDraft | null {
 }
 
 export function saveWorkflowDraft(key: string, workflow: CustomStrategyWorkflow) {
-  const draft: WorkflowDraft = { schema_version: 1, saved_at: new Date().toISOString(), workflow }
+  const draft: WorkflowDraft = { schema_version: 2, saved_at: new Date().toISOString(), workflow }
   localStorage.setItem(key, JSON.stringify(draft))
   return draft
 }
