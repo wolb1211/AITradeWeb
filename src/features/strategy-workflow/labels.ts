@@ -92,7 +92,7 @@ function describeVolume(volume?: { mode: string; value: number }) {
 
 function describeTarget(target?: WorkflowPriceTarget) {
   if (!target) return '未设置价格'
-  if (target.kind === 'entry_price') return '开仓价'
+  if (target.kind === 'entry_price') return target.operation === 'add' ? `开仓价 + ${formatNumber(target.offset_value || 0)}` : target.operation === 'subtract' ? `开仓价 - ${formatNumber(target.offset_value || 0)}` : '开仓价'
   if (target.kind === 'current_price') return '当前价'
   if (target.kind === 'recent_low') return `最近${target.lookback || 5}根最低价`
   if (target.kind === 'recent_high') return `最近${target.lookback || 5}根最高价`
