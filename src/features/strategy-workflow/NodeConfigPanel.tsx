@@ -169,7 +169,7 @@ function IndicatorFields({ value, onChange, title, catalog, compatibleGroups, co
     }
     onChange({ ...next, alias: indicatorAlias(next) })
   }
-  return <fieldset className="workflow-fieldset"><legend>{title}</legend>
+  return <fieldset className="workflow-fieldset"><legend>{title}</legend>{value.kind === 'position' && <button type="button" className="workflow-add-output" onClick={() => onChange({ ...value, name: 'stop_distance' })}>选择当前价格与止损的距离</button>}
     <label><span>指标</span><FormSelect value={definition.name} onChange={selectIndicator} data={selectableCatalog.map((item) => [item.name, item.title])} /></label>
     {(definition.parameters || []).length > 0 && <div className={`workflow-parameter-grid${(definition.parameters || []).length >= 3 ? ' three' : ''}`}>{(definition.parameters || []).map((parameter) => <label key={parameter.name}><span>{parameter.label}</span><input type="number" min="0.000001" step={Number.isInteger(parameter.default) ? 1 : 0.1} value={Number(params[parameter.name] ?? parameter.default)} onChange={(event) => update({ params: { ...params, [parameter.name]: Number(event.target.value) } })} /></label>)}</div>}
     {selectableOutputs.length > 1 && selectedOutput && <label><span>指标值</span><FormSelect value={selectedOutput.component} onChange={(component) => update({ component })} data={selectableOutputs.map((output) => [output.component, output.title])} /></label>}
