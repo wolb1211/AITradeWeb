@@ -20,6 +20,7 @@ import {
   type StrategySettingsDraftValue,
 } from '../features/strategy-workflow/draftStorage'
 import type { CustomStrategyWorkflow, WorkflowStage, WorkflowStageName } from '../features/strategy-workflow/types'
+import { validateWorkflowDraft } from '../features/strategy-workflow/validation'
 
 const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({ default: module.PnlChart })))
 const WorkflowEditor = lazy(() => import('../features/strategy-workflow/WorkflowEditor').then((module) => ({ default: module.WorkflowEditor })))
@@ -466,6 +467,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const [aiModelOptions, setAiModelOptions] = useState<AiModelOption[]>([])
   const [aiModelsLoading, setAiModelsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [customPreview, setCustomPreview] = useState<CustomStrategyPreview | null>(null)
   const [pendingStrategyPayload, setPendingStrategyPayload] = useState<Record<string, unknown> | null>(null)
   const workflowDraftStorageKey = useMemo(() => workflowDraftKey(draftOwnerId, deployment?.id || 'new'), [deployment?.id, draftOwnerId])
@@ -697,6 +699,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
   const shouldPersistWorkflow = strategySource === 'custom' && (!deployment || Boolean(deployment.workflow) || workflowTouched)
   const saveStrategy = async (payload: Record<string, unknown>, compiledConfig?: CustomStrategyPreview) => {
     setSaving(true)
+    setSaveError('')
     try {
       await apiRequest<{ id: string; deployment_key?: string }>(editing && deployment ? `/api/v1/auth/strategies/${deployment.id}` : '/api/v1/auth/strategies', {
         method: editing ? 'PATCH' : 'POST',
@@ -712,7 +715,9 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
       if (editing && deployment && onSaved) onSaved()
       else navigate(editing && deployment ? `/app/strategies/${deployment.id}` : '/app/strategies')
     } catch (reason) {
-      notifications.show({ title: editing ? '保存失败' : '创建失败', message: reason instanceof Error ? reason.message : '策略保存失败', color: 'red' })
+      const message = reason instanceof Error ? reason.message : '策略保存失败'
+      setSaveError(message)
+      notifications.show({ title: editing ? '保存失败' : '创建失败', message, color: 'red', autoClose: 8000 })
     } finally {
       setSaving(false)
     }
@@ -731,6 +736,16 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     const currentHasVisualWorkflow = strategySource === 'custom'
       && (currentWorkflow.open.nodes.length > 1 || currentWorkflow.position.nodes.length > 1)
     if (strategySource === 'custom') {
+      if (currentHasVisualWorkflow) {
+        const issues = validateWorkflowDraft(currentWorkflow)
+        if (issues.length) {
+          const first = issues[0]
+          const message = `${first.stage === 'open' ? '开仓' : '风控'}流程${first.nodeId ? `（节点 ${first.nodeId}）` : ''}：${first.message}`
+          setSaveError(message)
+          notifications.show({ title: '流程校验未通过', message, color: 'red', autoClose: 8000 })
+          return
+        }
+      }
       // Legacy text-only strategies remain runnable, but once opened in the
       // editor they must be converted to a visual workflow before saving so
       // every edited strategy has one unambiguous source of truth.
@@ -883,7 +898,8 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     }
     void generateWorkflowStage(stage)
   }
-  return <form className={`strategy-form ${strategySource === 'custom' ? 'custom-strategy-form' : 'library-strategy-form'}`} onSubmit={submit} aria-busy={saving}>
+  return <form noValidate className={`strategy-form ${strategySource === 'custom' ? 'custom-strategy-form' : 'library-strategy-form'}`} onSubmit={submit} aria-busy={saving}>
+    {saveError && <div className="auth-message error strategy-save-error" role="alert">保存失败：{saveError}</div>}
     {saving && <div className="strategy-saving-overlay" role="status" aria-live="polite"><div><Loader color="teal" size="md" /><strong>{savingMessage}</strong><span>处理完成前请不要关闭页面</span></div></div>}
     {strategySource === 'official' ? <section className="panel form-section strategy-library-section"><div className="form-section-title"><span>01</span><div><h2>选择GL策略</h2><p>当前可选择已经配置完成的 GL 策略。</p></div></div><label className="library-option selected"><input type="radio" defaultChecked /><strong>{strategyTitle}</strong><button className="library-detail-button" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setStrategyDetailOpened(true) }}>查看详情<ChevronRight size={15} /></button><Check /></label></section> : <>
       <section className={`panel form-section strategy-workflow-module ${expandedWorkflowStages.open ? 'expanded' : ''}`}>
