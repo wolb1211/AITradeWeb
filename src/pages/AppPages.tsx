@@ -278,7 +278,12 @@ function feeMoney(value: string | number | undefined) { return Number(value || 0
 function signedMoney(value: number) { return `${value > 0 ? '+' : ''}${value.toFixed(2)}` }
 function numberText(value: number) { return Number(value || 0).toLocaleString('zh-CN') }
 function tokenText(value: number) { return Number(value || 0).toLocaleString('zh-CN') }
-function unixTime(value: number) { return value ? new Date(value < 1e12 ? value * 1000 : value).toLocaleString('zh-CN', { hour12: false }) : '-' }
+// Deal times arrive as the broker's server clock expressed as a Unix timestamp,
+// with no timezone attached. Rendering them in the viewer's timezone shifted
+// every order by the browser's offset, so an order the trading terminal shows at
+// 06:29 appeared here as 14:29. Show the stored value as-is so the page and the
+// terminal agree.
+function unixTime(value: number) { return value ? new Date(value < 1e12 ? value * 1000 : value).toLocaleString('zh-CN', { hour12: false, timeZone: 'UTC' }) : '-' }
 function isoTime(value: string) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-' }
 function tradeSide(value: string) { const side = String(value || '').toUpperCase(); return side === '0' || side.includes('BUY') ? 'BUY' : side === '1' || side.includes('SELL') ? 'SELL' : side || '-' }
 function ledgerName(value: string) { return ({ admin_recharge: '人工充值', admin_deduction: '人工扣减', ai_charge: 'AI 调用', refund: '退款' } as Record<string, string>)[value] || value }
