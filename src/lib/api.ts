@@ -65,6 +65,7 @@ const errorMessages: Record<string, string> = {
   invalid_strategy_data_settings: '请选择正确的数据类型，并将 K 线数量设置为 10～1000',
   invalid_strategy_description: '策略说明不能超过 1000 个字符',
   invalid_invite_code: '邀请码无效或该代理已停止邀请',
+  invite_code_required: '注册需要邀请码，请通过代理发给您的邀请链接进入注册页面',
   agent_required: '当前账号不是代理',
 }
 

@@ -98,6 +98,8 @@ export function RegisterPage() {
   const [searchParams] = useSearchParams()
   const queryInvite = (searchParams.get('invite') || '').trim().toUpperCase()
   const [inviteCode] = useState(() => queryInvite || localStorage.getItem('gainlab_invite_code') || '')
+  // 注册为邀请制：没有邀请码就注册不了，按钮显示为不可用（但仍可点击以给出提示）。
+  const missingInvite = !inviteCode
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -109,6 +111,8 @@ export function RegisterPage() {
   }, [queryInvite])
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError('')
+    // 注册为邀请制：没有邀请码时前端也拦一道，服务端同样会拒绝（不能只靠前端）。
+    if (missingInvite) return setError('注册需要邀请码，请通过代理发给您的邀请链接进入注册页面')
     if (password !== confirm) return setError('两次输入的密码不一致')
     setLoading(true)
     try {
@@ -119,13 +123,21 @@ export function RegisterPage() {
   }
   return <AuthShell eyebrow="CREATE ACCOUNT" title="创建独立账号" description="注册并验证邮箱后即可进入工作台；使用策略需要开通 VIP。" footer={<>已有账号？<Link to="/login">返回登录</Link></>}>
     <form className="auth-form" onSubmit={submit}>
-      {inviteCode && <div className="invite-register-notice">您正在通过邀请码 <strong>{inviteCode}</strong> 注册</div>}
+      {inviteCode
+        ? <div className="invite-register-notice">您正在通过邀请码 <strong>{inviteCode}</strong> 注册</div>
+        : <div className="invite-register-notice" style={{ color: '#c0392b' }}>注册需要邀请码，请通过代理发给您的邀请链接进入本页面</div>}
       <label><span>邮箱账号</span><div className="input-wrap"><Mail size={18} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required /></div></label>
       <label><span>设置密码</span><PasswordInput value={password} onChange={setPassword} placeholder="至少 8 位，同时包含字母和数字" /></label>
       <label><span>确认密码</span><PasswordInput value={confirm} onChange={setConfirm} placeholder="再次输入密码" /></label>
       <label className="check-row"><input type="checkbox" required /><span>我已阅读并同意 <button className="legal-inline-link" type="button" onClick={() => setLegalType('terms')}>服务条款</button> 和 <button className="legal-inline-link" type="button" onClick={() => setLegalType('privacy')}>隐私政策</button></span></label>
       <Message error={error} />
-      <button className="button button-primary auth-submit" type="submit" disabled={loading}>{loading ? '正在发送…' : '继续验证邮箱'}<ArrowRight size={17} /></button>
+      <button
+        className="button button-primary auth-submit"
+        type="submit"
+        disabled={loading}
+        aria-disabled={missingInvite || loading}
+        style={missingInvite ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+      >{loading ? '正在发送…' : '继续验证邮箱'}<ArrowRight size={17} /></button>
     </form>
     <Modal
       opened={legalType !== null}
