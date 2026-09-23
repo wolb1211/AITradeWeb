@@ -271,6 +271,10 @@ print(answer.choices[0].message.content)`
       <div className="api-access-hint">
         说明：接口与 OpenAI 兼容，可直接使用官方 SDK；不支持流式（stream）返回；调用记录可在「使用记录」中按场景筛选查看。
       </div>
+      <div className="api-access-hint">
+        <strong>多轮对话：</strong>接口是无状态的，每次请求把<strong>完整历史</strong>放进 <code>messages</code> 即可（和 OpenAI 的用法一致），
+        例如第二轮把「用户提问 + 上一轮回答 + 新提问」一起发过来。这样上下文由你完全掌控，费用也只按你实际发送的内容计算。
+      </div>
     </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">MODELS</span><h2>可用模型与价格</h2></div></div>
