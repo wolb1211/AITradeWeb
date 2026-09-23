@@ -54,13 +54,13 @@ export function ApiAccessPage() {
           setKeys(keyResult.value.list || [])
         } else {
           const reason = keyResult.reason
-          problems.push(`读取 API Key 失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+          problems.push(`读取 API Key 失败（/api/v1/auth/api-keys）：${reason instanceof Error ? reason.message : '未知错误'}`)
         }
         if (modelResult.status === 'fulfilled') {
           setModels(modelResult.value.list || [])
         } else {
           const reason = modelResult.reason
-          problems.push(`读取模型价格失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+          problems.push(`读取模型价格失败（/api/v1/auth/ai-model-options）：${reason instanceof Error ? reason.message : '未知错误'}`)
         }
         setError(problems.join('；'))
       })
