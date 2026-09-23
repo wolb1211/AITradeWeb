@@ -71,12 +71,14 @@ export function ApiAccessPage() {
 
   const activeKeys = useMemo(() => keys.filter((item) => item.status === 'active'), [keys])
 
+  // provider_name 是「厂商 / 模型」，标签只按厂商分组。
+  const providerOf = (value: string) => String(value || '').split('/')[0].trim()
   const providers = useMemo(
-    () => ['全部', ...Array.from(new Set(models.map((item) => item.provider_name).filter(Boolean)))],
+    () => ['全部', ...Array.from(new Set(models.map((item) => providerOf(item.provider_name)).filter(Boolean)))],
     [models]
   )
   const visibleModels = useMemo(
-    () => (provider === '全部' ? models : models.filter((item) => item.provider_name === provider)),
+    () => (provider === '全部' ? models : models.filter((item) => providerOf(item.provider_name) === provider)),
     [models, provider]
   )
 
@@ -286,7 +288,7 @@ print(answer.choices[0].message.content)`
           <tbody>
             {visibleModels.map((item) => <tr key={item.model}>
               <td><code className="usage-key">{item.model}</code></td>
-              <td>{item.provider_name || '-'}</td>
+              <td>{providerOf(item.provider_name) || '-'}</td>
               <td>{item.supports_vision ? '支持' : '不支持'}</td>
               <td>¥{formatPrice(item.input_price_per_million)}</td>
               <td>¥{formatPrice(item.output_price_per_million)}</td>
