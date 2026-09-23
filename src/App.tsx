@@ -10,6 +10,7 @@ import {
   CustomAiStrategyCreatePage, StrategyDetailPage, StrategyLibraryCreatePage, UsagePage, WalletPage, WorkflowPrototypePage,
 } from './pages/AppPages'
 import { CustomStrategyIntroPage, GuideDetailPage, GuidePage, HomePage, LegalPage, OfficialStrategiesPage, PricingPage } from './pages/PublicPages'
+import { ApiAccessPage } from './pages/ApiAccessPage'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="usage" element={<UsagePage />} />
+        <Route path="api" element={<ApiAccessPage />} />
         <Route path="ea-downloads" element={<EaDownloadsPage />} />
         <Route path="agent" element={<AgentCenterPage />} />
         <Route path="profile" element={<ProfilePage />} />

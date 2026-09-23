@@ -1,5 +1,5 @@
 import {
-  Activity, BookOpen, Bot, ChevronLeft, CircleUserRound, Coins, Download, FileClock,
+  Activity, BookOpen, Bot, ChevronLeft, CircleUserRound, Coins, Download, FileClock, KeyRound,
   LayoutDashboard, LogOut, Menu, ReceiptText, Settings, ShieldCheck, UsersRound, X,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -17,6 +17,7 @@ const primaryNav = [
   { to: '/app/orders', label: '历史订单', icon: ReceiptText },
   { to: '/app/wallet', label: 'GL AI余额', icon: Coins },
   { to: '/app/usage', label: '使用记录', icon: FileClock },
+  { to: '/app/api', label: 'AI 开放接口', icon: KeyRound },
   { to: '/app/ea-downloads', label: 'EA 下载', icon: Download },
 ]
 
@@ -34,6 +35,7 @@ const titles: Record<string, string> = {
   '/app/orders': '历史订单',
   '/app/wallet': 'GL AI余额',
   '/app/usage': 'AI 使用记录',
+  '/app/api': 'AI 开放接口',
   '/app/ea-downloads': 'EA 下载',
   '/app/profile': '用户资料',
   '/app/security': '账户安全',

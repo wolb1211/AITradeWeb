@@ -686,3 +686,19 @@ body,
 .usage-screenshot-content > p { margin: 0; color: var(--amber); font-size: 12px; }
 .usage-screenshot-content img { display: block; width: 100%; max-height: 430px; object-fit: contain; border: 1px solid var(--border); border-radius: 9px; background: #050807; }
 .usage-screenshot-content > small { color: var(--muted); font-size: 12px; text-align: center; }
+
+/* AI 开放接口 —— 用户中心模块 */
+.api-access-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.api-access-field { display: grid; gap: 8px; align-content: start; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.api-access-field > span { color: var(--muted-2); font-size: 12px; }
+.api-access-field > code { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: Consolas, Monaco, monospace; font-size: 12.5px; word-break: break-all; }
+.api-access-field > button { justify-self: start; }
+.api-access-hint { margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.api-key-created { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--amber); border-radius: 10px; }
+.api-key-created strong { color: var(--amber); font-size: 13px; }
+.api-key-created > code { flex: 1 1 320px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: Consolas, Monaco, monospace; font-size: 12.5px; word-break: break-all; }
+.api-key-status { display: inline-block; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted-2); font-size: 12px; }
+.api-key-status.is-active { border-color: rgba(50,217,155,.35); color: #32d99b; }
+.api-sample { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.api-sample-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--muted-2); font-size: 12px; }
+.api-sample pre { margin: 0; padding: 12px; overflow: auto; color: var(--text); font-family: Consolas, Monaco, monospace; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
