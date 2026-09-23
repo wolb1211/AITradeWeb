@@ -39,16 +39,28 @@ export function ApiAccessPage() {
 
   const load = () => {
     setLoading(true)
-    Promise.all([
+    // allSettled: the key list and the price list are independent, so one failing
+    // must not blank the other.
+    Promise.allSettled([
       apiRequest<{ list: ApiKey[] }>('/api/v1/auth/api-keys'),
       apiRequest<{ list: ModelOption[] }>('/api/v1/auth/ai-model-options'),
     ])
-      .then(([keyList, modelList]) => {
-        setKeys(keyList.list || [])
-        setModels(modelList.list || [])
-        setError('')
+      .then(([keyResult, modelResult]) => {
+        const problems: string[] = []
+        if (keyResult.status === 'fulfilled') {
+          setKeys(keyResult.value.list || [])
+        } else {
+          const reason = keyResult.reason
+          problems.push(`读取 API Key 失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+        }
+        if (modelResult.status === 'fulfilled') {
+          setModels(modelResult.value.list || [])
+        } else {
+          const reason = modelResult.reason
+          problems.push(`读取模型价格失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+        }
+        setError(problems.join('；'))
       })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : '加载失败'))
       .finally(() => setLoading(false))
   }
 
@@ -200,25 +212,6 @@ print(answer.choices[0].message.content)`
     </section>
 
     <section className="panel">
-      <div className="panel-heading"><div><span className="eyebrow">MODELS</span><h2>可用模型与价格</h2></div></div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>模型</th><th>服务商</th><th>图片输入</th><th>输入价格（元/百万 Token）</th><th>输出价格（元/百万 Token）</th></tr></thead>
-          <tbody>
-            {models.map((item) => <tr key={item.model}>
-              <td><code className="usage-key">{item.model}</code></td>
-              <td>{item.provider_name || '-'}</td>
-              <td>{item.supports_vision ? '支持' : '不支持'}</td>
-              <td>¥{item.input_price_per_million}</td>
-              <td>¥{item.output_price_per_million}</td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>
-      <div className="api-access-hint">价格按平台计费标准实时同步；每次调用按实际输入 / 输出 Token 计算，从 GL AI 余额扣除。</div>
-    </section>
-
-    <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">EXAMPLES</span><h2>调用示例</h2></div></div>
       <div className="api-sample">
         <div className="api-sample-head"><span>cURL</span>
@@ -240,5 +233,24 @@ print(answer.choices[0].message.content)`
         说明：接口与 OpenAI 兼容，可直接使用官方 SDK；不支持流式（stream）返回；调用记录可在「使用记录」中按场景筛选查看。
       </div>
     </section>
+    <section className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">MODELS</span><h2>可用模型与价格</h2></div></div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>模型</th><th>服务商</th><th>图片输入</th><th>输入价格（元/百万 Token）</th><th>输出价格（元/百万 Token）</th></tr></thead>
+          <tbody>
+            {models.map((item) => <tr key={item.model}>
+              <td><code className="usage-key">{item.model}</code></td>
+              <td>{item.provider_name || '-'}</td>
+              <td>{item.supports_vision ? '支持' : '不支持'}</td>
+              <td>¥{item.input_price_per_million}</td>
+              <td>¥{item.output_price_per_million}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="api-access-hint">价格按平台计费标准实时同步；每次调用按实际输入 / 输出 Token 计算，从 GL AI 余额扣除。</div>
+    </section>
+
   </>
 }
