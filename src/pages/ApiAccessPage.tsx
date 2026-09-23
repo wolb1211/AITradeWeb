@@ -34,6 +34,9 @@ export function ApiAccessPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [keyName, setKeyName] = useState('')
+  const [provider, setProvider] = useState('全部')
   const [copied, setCopied] = useState('')
   const [error, setError] = useState('')
 
@@ -68,6 +71,15 @@ export function ApiAccessPage() {
 
   const activeKeys = useMemo(() => keys.filter((item) => item.status === 'active'), [keys])
 
+  const providers = useMemo(
+    () => ['全部', ...Array.from(new Set(models.map((item) => item.provider_name).filter(Boolean)))],
+    [models]
+  )
+  const visibleModels = useMemo(
+    () => (provider === '全部' ? models : models.filter((item) => item.provider_name === provider)),
+    [models, provider]
+  )
+
   const copy = async (value: string, tag: string) => {
     try {
       await navigator.clipboard.writeText(value)
@@ -83,9 +95,11 @@ export function ApiAccessPage() {
     try {
       const result = await apiRequest<{ key: string }>('/api/v1/auth/api-keys', {
         method: 'POST',
-        body: JSON.stringify({ name: '我的应用' }),
+        body: JSON.stringify({ name: keyName.trim() || '我的应用' }),
       })
       setCreated(result.key)
+      setDialogOpen(false)
+      setKeyName('')
       load()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '生成失败')
@@ -109,6 +123,8 @@ export function ApiAccessPage() {
     }
   }
 
+  const formatPrice = (value: string) => Number(value || 0).toFixed(2)
+
   const curlSample = `curl ${API_BASE}/chat/completions \\
   -H "Authorization: Bearer ${activeKeys[0]?.key_prefix ? '你的API Key' : '你的API Key'}" \\
   -H "Content-Type: application/json" \\
@@ -124,6 +140,27 @@ answer = client.chat.completions.create(
 print(answer.choices[0].message.content)`
 
   return <>
+    {dialogOpen && <div className="security-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialogOpen(false) }}>
+      <section className="security-modal api-key-dialog" role="dialog" aria-modal="true">
+        <h2>生成新的 API Key</h2>
+        <p>给这个 Key 起个名字，方便以后区分用途（例如「我的网站」「测试脚本」）。</p>
+        <label className="api-key-dialog-field">
+          <span>名称</span>
+          <input
+            value={keyName}
+            maxLength={32}
+            placeholder="我的应用"
+            autoFocus
+            onChange={(event) => setKeyName(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !busy) createKey() }}
+          />
+        </label>
+        <div className="api-key-dialog-actions">
+          <button className="button button-secondary" type="button" onClick={() => setDialogOpen(false)}>取消</button>
+          <button className="button" type="button" disabled={busy} onClick={createKey}>{busy ? '生成中…' : '生成'}</button>
+        </div>
+      </section>
+    </div>}
     <PageHeading
       eyebrow="AI API"
       title="AI 开放接口"
@@ -166,7 +203,7 @@ print(answer.choices[0].message.content)`
     <section className="panel">
       <div className="panel-heading">
         <div><span className="eyebrow">API KEYS</span><h2>我的 API Key</h2></div>
-        <button className="button" type="button" disabled={busy} onClick={createKey}>
+        <button className="button" type="button" disabled={busy} onClick={() => setDialogOpen(true)}>
           <Plus size={15} /> 生成新 Key
         </button>
       </div>
@@ -235,16 +272,24 @@ print(answer.choices[0].message.content)`
     </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">MODELS</span><h2>可用模型与价格</h2></div></div>
+      <div className="api-provider-tabs">
+        {providers.map((item) => <button
+          key={item}
+          type="button"
+          className={`api-provider-tab ${provider === item ? 'is-active' : ''}`}
+          onClick={() => setProvider(item)}
+        >{item}</button>)}
+      </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>模型</th><th>服务商</th><th>图片输入</th><th>输入价格（元/百万 Token）</th><th>输出价格（元/百万 Token）</th></tr></thead>
           <tbody>
-            {models.map((item) => <tr key={item.model}>
+            {visibleModels.map((item) => <tr key={item.model}>
               <td><code className="usage-key">{item.model}</code></td>
               <td>{item.provider_name || '-'}</td>
               <td>{item.supports_vision ? '支持' : '不支持'}</td>
-              <td>¥{item.input_price_per_million}</td>
-              <td>¥{item.output_price_per_million}</td>
+              <td>¥{formatPrice(item.input_price_per_million)}</td>
+              <td>¥{formatPrice(item.output_price_per_million)}</td>
             </tr>)}
           </tbody>
         </table>

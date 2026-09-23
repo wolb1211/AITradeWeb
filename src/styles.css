@@ -702,3 +702,16 @@ body,
 .api-sample { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .api-sample-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--muted-2); font-size: 12px; }
 .api-sample pre { margin: 0; padding: 12px; overflow: auto; color: var(--text); font-family: Consolas, Monaco, monospace; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
+/* 开放接口 —— 生成 Key 弹窗、服务商切换 */
+.api-key-dialog { width: min(460px, 92vw); }
+.api-key-dialog h2 { margin: 0 0 6px; font-size: 17px; }
+.api-key-dialog > p { margin: 0 0 14px; color: var(--muted-2); font-size: 13px; line-height: 1.7; }
+.api-key-dialog-field { display: grid; gap: 6px; margin-bottom: 18px; }
+.api-key-dialog-field > span { color: var(--muted-2); font-size: 12px; }
+.api-key-dialog-field > input { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); font-size: 14px; }
+.api-key-dialog-field > input:focus { border-color: #32d99b; outline: none; }
+.api-key-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.api-provider-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.api-provider-tab { padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--muted-2); font-size: 12.5px; cursor: pointer; }
+.api-provider-tab.is-active { border-color: #32d99b; color: #32d99b; }
