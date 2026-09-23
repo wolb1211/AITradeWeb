@@ -37,6 +37,7 @@ export function ApiAccessPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [keyName, setKeyName] = useState('')
   const [provider, setProvider] = useState('全部')
+  const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
   const [copied, setCopied] = useState('')
   const [error, setError] = useState('')
 
@@ -117,6 +118,7 @@ export function ApiAccessPage() {
         method: 'POST',
         body: JSON.stringify({ id }),
       })
+      setRevokeTarget(null)
       load()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '撤销失败')
@@ -160,6 +162,23 @@ print(answer.choices[0].message.content)`
         <div className="api-key-dialog-actions">
           <button className="button button-secondary" type="button" onClick={() => setDialogOpen(false)}>取消</button>
           <button className="button" type="button" disabled={busy} onClick={createKey}>{busy ? '生成中…' : '生成'}</button>
+        </div>
+      </section>
+    </div>}
+    {revokeTarget && <div className="security-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRevokeTarget(null) }}>
+      <section className="security-modal api-key-dialog" role="dialog" aria-modal="true">
+        <h2>撤销这个 API Key？</h2>
+        <p>
+          撤销后，所有正在使用它的程序会<strong>立即失效</strong>（返回 401），且<strong>无法恢复</strong>，只能重新生成。
+        </p>
+        <div className="api-key-dialog-target">
+          <span>名称</span><strong>{revokeTarget.name || '未命名'}</strong>
+          <span>Key</span><code>{revokeTarget.key_prefix}</code>
+          <span>调用次数</span><strong>{revokeTarget.request_count}</strong>
+        </div>
+        <div className="api-key-dialog-actions">
+          <button className="button button-secondary" type="button" disabled={busy} onClick={() => setRevokeTarget(null)}>取消</button>
+          <button className="button" type="button" disabled={busy} onClick={() => revokeKey(revokeTarget.id)}>{busy ? '撤销中…' : '确认撤销'}</button>
         </div>
       </section>
     </div>}
@@ -238,7 +257,7 @@ print(answer.choices[0].message.content)`
                 <td>{new Date(item.created_at).toLocaleString()}</td>
                 <td>
                   {item.status === 'active'
-                    ? <button className="usage-detail-button" type="button" disabled={busy} onClick={() => revokeKey(item.id)}>
+                    ? <button className="usage-detail-button" type="button" disabled={busy} onClick={() => setRevokeTarget(item)}>
                         <Trash2 size={13} /> 撤销
                       </button>
                     : <span className="muted-cell">-</span>}

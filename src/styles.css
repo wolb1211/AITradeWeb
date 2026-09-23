@@ -715,3 +715,7 @@ body,
 .api-provider-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .api-provider-tab { padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--muted-2); font-size: 12.5px; cursor: pointer; }
 .api-provider-tab.is-active { border-color: #32d99b; color: #32d99b; }
+.api-key-dialog-target { display: grid; gap: 6px; margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.api-key-dialog-target > span { color: var(--muted-2); font-size: 12px; }
+.api-key-dialog-target > strong { color: var(--text); font-size: 13px; }
+.api-key-dialog-target > code { color: var(--text); font-family: Consolas, Monaco, monospace; font-size: 12.5px; word-break: break-all; }
