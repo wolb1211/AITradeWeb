@@ -118,7 +118,7 @@ export function PricingPage() {
                 <div><span>MEMBERSHIP</span><h2>VIP1 会员</h2></div>
                 <em>推荐</em>
               </div>
-              <div className="pricing-price"><small>¥</small><strong>3,980</strong><span>/ 年</span></div>
+              <div className="pricing-price"><small>¥</small><strong>5,980</strong><span>/ 年</span></div>
               <p>适合需要连接 MT4 / MT5，并长期运行 AI 策略的用户。</p>
               <ul>
                 <li><Check />创建并管理策略 Key</li>
