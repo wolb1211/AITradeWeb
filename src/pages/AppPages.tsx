@@ -1429,7 +1429,7 @@ export function AgentCenterPage() {
       <div className="agent-link-block"><span>专属邀请链接</span><div><code title={inviteLink}>{inviteLink}</code><button className="button button-primary" type="button" onClick={() => copy(inviteLink, '邀请链接')}><Copy size={15} />复制链接</button></div></div>
     </section>
     <section className="stats-grid compact-stats agent-stats"><StatCard label="累计邀请" value={numberText(data.summary.total_users)} note="通过邀请码注册" icon={<UsersRound />} /><StatCard label="正常账号" value={numberText(data.summary.active_users)} note="账号状态正常" icon={<UserRound />} tone="blue" /><StatCard label="有效 VIP" value={numberText(data.summary.active_vip_users)} note="VIP 当前有效" icon={<ShieldCheck />} tone="amber" /></section>
-    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">REFERRED USERS</span><h2>邀请用户</h2></div><span className="agent-list-note">邮箱已脱敏，仅用于邀请统计</span></div>
+    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">REFERRED USERS</span><h2>邀请用户</h2></div><span className="agent-list-note">邮箱已脱敏 · 交易订单以 MT 账号交割单为准，同步订单可能漏单，仅供概览</span></div>
       {loading ? <div className="permission-loading">正在更新列表...</div> : data.list.length ? <><div className="table-wrap"><table><thead><tr><th>用户</th><th>邮箱</th><th>账号状态</th><th>VIP</th><th>策略 Key</th><th>邀请时间</th></tr></thead><tbody>{data.list.map((item) => {
         const keys = item.deployments || []
         const expanded = expandedUser === item.id
@@ -1478,7 +1478,7 @@ export function AgentCenterPage() {
           <StatCard label="平仓订单" value={numberText(detail.summary.closed_count)} note={`胜率 ${detail.summary.win_rate.toFixed(2)}%`} icon={<ReceiptText />} />
           <StatCard label="累计盈亏" value={signedMoney(detail.summary.pnl)} note={`交易 ${detail.summary.symbol_count} 个商品`} icon={<LineChart />} tone="amber" />
         </section>
-        <div className="agent-key-modal-note">累计 AI Token {tokenText(detail.summary.official_tokens + detail.summary.custom_tokens)} · 盈亏与订单来自每日汇总，成交明细以该用户 EA 的交割单为准。</div>
+        <div className="agent-key-modal-note">累计 AI Token {tokenText(detail.summary.official_tokens + detail.summary.custom_tokens)} · 盈亏与订单来自每日汇总，同步订单可能漏单，实际成交以该用户的 MT 账号交割单为准。</div>
         <Suspense fallback={<div className="permission-loading">正在加载图表...</div>}>
           <PnlChart data={detail.curve} />
         </Suspense>
