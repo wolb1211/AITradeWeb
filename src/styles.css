@@ -736,3 +736,7 @@ body,
 .strategy-row-stats span { font-size: 9px; }
 .strategy-row-stats strong { font-size: 15px; }
 .strategy-row-footer { margin-top: 12px; padding-top: 10px; }
+/* 策略卡片上的绑定 MT 账号标签：和策略代码标签同一行，用中性色区分开，
+   没绑定时用琥珀色提示一下。 */
+.strategy-row-title span.strategy-account { display: inline-flex; align-items: center; gap: 4px; color: #93a8a0; background: rgba(255,255,255,.05); }
+.strategy-row-title span.strategy-account.unbound { color: #c9a06a; background: rgba(240,180,90,.09); }

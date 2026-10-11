@@ -397,7 +397,7 @@ export function StrategiesPage() {
     {loading && !data ? <div className="permission-loading">正在加载策略...</div> : error && !data ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>策略加载失败</strong><span>{error}</span></div></div> : <div className="strategy-list">{filtered.length ? filtered.map((item) => <article className="strategy-row" key={item.id}>
       <div className="strategy-row-head">
         <div className="strategy-row-icon"><BrainCircuit /></div>
-        <div className="strategy-row-title"><h3>{item.name}</h3><span>{item.strategy_code === 'CUSTOM_AI_V1' ? '自定义策略' : `GainLab 官方 · ${item.strategy_code}`}</span></div>
+        <div className="strategy-row-title"><h3>{item.name}</h3><span>{item.strategy_code === 'CUSTOM_AI_V1' ? '自定义策略' : `GainLab 官方 · ${item.strategy_code}`}</span><span className={item.mt_login ? 'strategy-account' : 'strategy-account unbound'}><Fingerprint size={11} />{item.mt_login ? `MT 账号 ${item.mt_login}` : '未绑定账号'}</span></div>
         <div className="strategy-row-actions">
           <StatusPill tone={statusTone(item.status)}>{statusText(item.status)}</StatusPill>
           <Menu position="bottom-end" withinPortal shadow="md">
