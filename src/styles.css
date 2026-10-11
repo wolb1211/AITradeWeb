@@ -740,3 +740,21 @@ body,
    没绑定时用琥珀色提示一下。 */
 .strategy-row-title span.strategy-account { display: inline-flex; align-items: center; gap: 4px; color: #93a8a0; background: rgba(255,255,255,.05); }
 .strategy-row-title span.strategy-account.unbound { color: #c9a06a; background: rgba(240,180,90,.09); }
+/* 代理中心：邀请用户的可展开 Key 子列表 + Key 统计弹窗 */
+.agent-key-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: #9fc8b8; background: rgba(50,217,155,.05); font-size: 10px; cursor: pointer; }
+.agent-key-toggle:hover { border-color: rgba(50,217,155,.3); }
+.agent-key-toggle > svg { transition: transform .16s ease; }
+.agent-key-toggle > svg.expanded { transform: rotate(90deg); }
+.agent-key-row > td { padding: 0 !important; background: rgba(0,0,0,.16); }
+.agent-key-list { display: grid; gap: 6px; padding: 10px 12px; }
+.agent-key-item { display: grid; grid-template-columns: minmax(120px,1.4fr) auto auto minmax(90px,1fr) auto auto auto auto; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: rgba(255,255,255,.015); font-size: 11px; text-align: left; cursor: pointer; }
+.agent-key-item:hover { border-color: rgba(50,217,155,.28); background: rgba(50,217,155,.03); }
+.agent-key-name { overflow: hidden; color: #ccd9d4; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.agent-key-code { color: var(--muted-2); font-size: 10px; }
+.agent-key-account { color: #93a8a0; font-size: 10px; }
+.agent-key-stat { color: var(--muted); font-size: 10px; }
+.agent-key-pnl { font-weight: 700; }
+.agent-key-more { display: inline-flex; align-items: center; gap: 2px; justify-self: end; color: var(--green); font-size: 10px; }
+.agent-key-modal-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 14px; color: var(--muted); font-size: 11px; }
+.agent-key-modal-meta strong { color: var(--text); }
+.agent-key-modal-note { margin: 10px 0 4px; color: var(--muted-2); font-size: 10px; }

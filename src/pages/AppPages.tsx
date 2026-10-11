@@ -8,7 +8,7 @@ import {
 import { Loader, Menu, Modal, Select } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { lazy, Suspense, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EmptyState, PageHeading, StatCard, StatusPill, TextLink } from '../components/Ui'
 import type { PnlCurvePoint } from '../components/PnlChart'
@@ -193,12 +193,31 @@ type EaDownloadItem = { id: string; name: string; description: string; oss_url: 
 function secureDownloadUrl(value: string) {
   return /^http:\/\//i.test(value) ? value.replace(/^http:\/\//i, 'https://') : value
 }
+type AgentReferredDeployment = {
+  id: string; name: string; strategy_code: string; deployment_key: string
+  status: string; mt_login: string
+  analysis_count: number; signal_count: number; order_count: number
+  pnl: number; tokens: number; updated_at: string
+}
+
+type AgentDeploymentDetail = {
+  deployment: { id: string; name: string; strategy_code: string; status: string; mt_login: string; updated_at: string }
+  owner: { id: number; email: string; nickname: string }
+  summary: {
+    analysis_count: number; signal_count: number; ai_order_count: number
+    closed_count: number; win_count: number; loss_count: number; win_rate: number
+    pnl: number; symbol_count: number; official_tokens: number; custom_tokens: number
+  }
+  curve: PnlCurvePoint[]
+}
+
 type AgentDashboardData = {
   agent_level: number; invite_code: string; page: number; size: number; pages: number; total: number
   summary: { total_users: number; active_users: number; active_vip_users: number }
   list: Array<{
     id: number; email: string; nickname: string; status: string; vip_level: number
     vip_active: boolean; vip_expires_at: string; referred_at: string; created_at: string
+    deployments: AgentReferredDeployment[]
   }>
 }
 
@@ -1364,7 +1383,24 @@ export function AgentCenterPage() {
   const [data, setData] = useState<AgentDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedUser, setExpandedUser] = useState<number | null>(null)
+  const [detail, setDetail] = useState<AgentDeploymentDetail | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const pageSize = 20
+
+  // 代理只能看自己邀请的用户，后端会再校验一次归属。
+  async function openKeyDetail(deploymentId: string) {
+    setDetailOpen(true); setDetailLoading(true); setDetail(null)
+    try {
+      setDetail(await apiRequest<AgentDeploymentDetail>('/api/v1/auth/agent/deployment', { method: 'POST', body: JSON.stringify({ deployment_id: deploymentId }) }))
+    } catch (reason) {
+      notifications.show({ color: 'red', title: '加载失败', message: reason instanceof Error ? reason.message : '无法读取该策略统计' })
+      setDetailOpen(false)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
   useEffect(() => {
     let active = true
     setLoading(true); setError('')
@@ -1394,8 +1430,60 @@ export function AgentCenterPage() {
     </section>
     <section className="stats-grid compact-stats agent-stats"><StatCard label="累计邀请" value={numberText(data.summary.total_users)} note="通过邀请码注册" icon={<UsersRound />} /><StatCard label="正常账号" value={numberText(data.summary.active_users)} note="账号状态正常" icon={<UserRound />} tone="blue" /><StatCard label="有效 VIP" value={numberText(data.summary.active_vip_users)} note="VIP 当前有效" icon={<ShieldCheck />} tone="amber" /></section>
     <section className="panel"><div className="panel-heading"><div><span className="eyebrow">REFERRED USERS</span><h2>邀请用户</h2></div><span className="agent-list-note">邮箱已脱敏，仅用于邀请统计</span></div>
-      {loading ? <div className="permission-loading">正在更新列表...</div> : data.list.length ? <><div className="table-wrap"><table><thead><tr><th>用户</th><th>邮箱</th><th>账号状态</th><th>VIP</th><th>邀请时间</th></tr></thead><tbody>{data.list.map((item) => <tr key={item.id}><td><strong>{item.nickname || `用户 ${item.id}`}</strong></td><td className="mono">{item.email || '-'}</td><td><span className={item.status === 'active' ? 'result-success' : 'result-neutral'}>{item.status === 'active' ? '正常' : '未激活'}</span></td><td><span className={item.vip_active ? 'result-success' : 'result-neutral'}>{item.vip_active ? `VIP ${item.vip_level}` : '未开通/已到期'}</span></td><td className="muted-cell">{isoTime(item.referred_at || item.created_at)}</td></tr>)}</tbody></table></div><div className="usage-pagination"><span>共 {numberText(data.total)} 人</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><em>{page} / {data.pages || 1}</em><button type="button" disabled={page >= (data.pages || 1) || loading} onClick={() => setPage((value) => Math.min(data.pages || 1, value + 1))}>下一页</button></div></div></> : <EmptyState icon={<UsersRound />} title="暂无邀请用户" description="复制上方邀请链接分享给新用户，注册成功后会显示在这里。" />}
+      {loading ? <div className="permission-loading">正在更新列表...</div> : data.list.length ? <><div className="table-wrap"><table><thead><tr><th>用户</th><th>邮箱</th><th>账号状态</th><th>VIP</th><th>策略 Key</th><th>邀请时间</th></tr></thead><tbody>{data.list.map((item) => {
+        const keys = item.deployments || []
+        const expanded = expandedUser === item.id
+        return <Fragment key={item.id}>
+          <tr>
+            <td><strong>{item.nickname || `用户 ${item.id}`}</strong></td>
+            <td className="mono">{item.email || '-'}</td>
+            <td><span className={item.status === 'active' ? 'result-success' : 'result-neutral'}>{item.status === 'active' ? '正常' : '未激活'}</span></td>
+            <td><span className={item.vip_active ? 'result-success' : 'result-neutral'}>{item.vip_active ? `VIP ${item.vip_level}` : '未开通/已到期'}</span></td>
+            <td>
+              {keys.length
+                ? <button className="agent-key-toggle" type="button" onClick={() => setExpandedUser(expanded ? null : item.id)}>
+                    <ChevronRight size={14} className={expanded ? 'expanded' : ''} />{keys.length} 个 Key
+                  </button>
+                : <span className="muted-cell">暂无</span>}
+            </td>
+            <td className="muted-cell">{isoTime(item.referred_at || item.created_at)}</td>
+          </tr>
+          {expanded && <tr className="agent-key-row"><td colSpan={6}>
+            <div className="agent-key-list">
+              {keys.map((key) => <button className="agent-key-item" type="button" key={key.id} onClick={() => openKeyDetail(key.id)}>
+                <span className="agent-key-name">{key.name || key.strategy_code || '未命名策略'}</span>
+                <span className="agent-key-code">{key.strategy_code}</span>
+                <span className={key.status === 'active' ? 'result-success' : 'result-neutral'}>{key.status === 'active' ? '运行中' : '已停用'}</span>
+                <span className="agent-key-account">{key.mt_login ? `账号 ${key.mt_login}` : '未绑定账号'}</span>
+                <span className="agent-key-stat">分析 {numberText(key.analysis_count)}</span>
+                <span className="agent-key-stat">订单 {numberText(key.order_count)}</span>
+                <span className={Number(key.pnl || 0) >= 0 ? 'agent-key-pnl profit' : 'agent-key-pnl loss'}>{signedMoney(key.pnl)}</span>
+                <span className="agent-key-more">查看统计<ChevronRight size={13} /></span>
+              </button>)}
+            </div>
+          </td></tr>}
+        </Fragment>
+      })}</tbody></table></div><div className="usage-pagination"><span>共 {numberText(data.total)} 人</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><em>{page} / {data.pages || 1}</em><button type="button" disabled={page >= (data.pages || 1) || loading} onClick={() => setPage((value) => Math.min(data.pages || 1, value + 1))}>下一页</button></div></div></> : <EmptyState icon={<UsersRound />} title="暂无邀请用户" description="复制上方邀请链接分享给新用户，注册成功后会显示在这里。" />}
     </section>
+    <Modal opened={detailOpen} onClose={() => setDetailOpen(false)} size="lg" centered title={detail ? `${detail.deployment.name || '策略 Key'} · ${detail.deployment.strategy_code}` : '策略统计'} classNames={{ content: 'agent-key-modal', header: 'agent-key-modal-header', title: 'agent-key-modal-title', body: 'agent-key-modal-body' }}>
+      {detailLoading ? <div className="permission-loading">正在加载统计...</div> : detail ? <>
+        <div className="agent-key-modal-meta">
+          <span>所属用户 <strong>{detail.owner.nickname || `用户 ${detail.owner.id}`}</strong> · {detail.owner.email}</span>
+          <span>绑定账号 <strong>{detail.deployment.mt_login || '未绑定'}</strong></span>
+          <span>状态 <strong>{detail.deployment.status === 'active' ? '运行中' : '已停用'}</strong></span>
+        </div>
+        <section className="stats-grid compact-stats">
+          <StatCard label="分析次数" value={numberText(detail.summary.analysis_count)} note={`AI 开单判断 ${numberText(detail.summary.ai_order_count)} 次`} icon={<Activity />} />
+          <StatCard label="有效信号" value={numberText(detail.summary.signal_count)} note="非观望的判断" icon={<Zap />} tone="blue" />
+          <StatCard label="平仓订单" value={numberText(detail.summary.closed_count)} note={`胜率 ${detail.summary.win_rate.toFixed(2)}%`} icon={<ReceiptText />} />
+          <StatCard label="累计盈亏" value={signedMoney(detail.summary.pnl)} note={`交易 ${detail.summary.symbol_count} 个商品`} icon={<LineChart />} tone="amber" />
+        </section>
+        <div className="agent-key-modal-note">累计 AI Token {tokenText(detail.summary.official_tokens + detail.summary.custom_tokens)} · 盈亏与订单来自每日汇总，成交明细以该用户 EA 的交割单为准。</div>
+        <Suspense fallback={<div className="permission-loading">正在加载图表...</div>}>
+          <PnlChart data={detail.curve} />
+        </Suspense>
+      </> : null}
+    </Modal>
   </>
 }
 
