@@ -89,26 +89,35 @@ export class ApiError extends Error {
 // reloads by hand. Two quiet retries turn that into a slightly slower load.
 const NETWORK_RETRY_DELAYS_MS = [400, 1200]
 
+// A hung connection is worse than a failed one: the page waits forever. Abort it
+// and let the retry open a fresh connection. AI calls legitimately take tens of
+// seconds, so those pass a larger limit of their own.
+const REQUEST_TIMEOUT_MS = 20000
+
+type ApiRequestOptions = RequestInit & { timeoutMs?: number }
+
 function isRetryableFailure(error: unknown): boolean {
   // fetch only rejects before a response exists: a 4xx or 5xx resolves normally.
   if (error instanceof TypeError) return true
+  if ((error as { name?: string } | null)?.name === 'AbortError') return true
   return error instanceof ApiError && error.retryable
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...rest } = options
   const token = localStorage.getItem('gainlab_auth_token')
   const request: RequestInit = {
-    ...options,
+    ...rest,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
+      ...rest.headers,
     },
   }
   let lastError: unknown = new ApiError('network_error', { retryable: true })
   for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      return await requestOnce<T>(path, request)
+      return await requestOnce<T>(path, request, timeoutMs)
     } catch (error) {
       lastError = error
       if (!isRetryableFailure(error) || attempt === NETWORK_RETRY_DELAYS_MS.length) break
@@ -118,8 +127,18 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   throw lastError
 }
 
-async function requestOnce<T>(path: string, request: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, request)
+async function requestOnce<T>(path: string, request: RequestInit, timeoutMs: number): Promise<T> {
+  const controller = new AbortController()
+  const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...request,
+      signal: request.signal || controller.signal,
+    })
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
   let payload: { code?: number; data?: T; detail?: string; message?: string }
   try {
     payload = await response.json()

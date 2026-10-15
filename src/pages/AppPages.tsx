@@ -23,6 +23,8 @@ import type { CustomStrategyWorkflow, WorkflowStage, WorkflowStageName } from '.
 import { validateWorkflowDraft } from '../features/strategy-workflow/validation'
 
 const PnlChart = lazy(() => import('../components/PnlChart').then((module) => ({ default: module.PnlChart })))
+// AI 生成与模型测试动辄跑几十秒，不能用页面加载那 20 秒的超时，否则会被当成网络失败反复重试。
+const AI_REQUEST_TIMEOUT_MS = 180000
 const WorkflowEditor = lazy(() => import('../features/strategy-workflow/WorkflowEditor').then((module) => ({ default: module.WorkflowEditor })))
 
 type PortalStrategy = {
@@ -856,6 +858,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
         const preview = await apiRequest<CustomStrategyPreview>('/api/v1/auth/custom-strategy/preview', {
           method: 'POST',
           body: JSON.stringify(payload),
+          timeoutMs: AI_REQUEST_TIMEOUT_MS,
         })
         setPendingStrategyPayload(payload)
         setCustomPreview(preview)
@@ -1075,6 +1078,7 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
           model: value.customModel.trim(),
           api_key: value.apiKey.trim(),
         }),
+        timeoutMs: AI_REQUEST_TIMEOUT_MS,
       })
       if (!result.success) {
         notifications.show({ title: '连接测试失败', message: result.error || '模型接口未能正常响应', color: 'red', autoClose: 8000 })
@@ -1102,6 +1106,7 @@ function AiSelect({ title, value, options, defaultEndpointId, loading, onShowPri
       const result = await apiRequest<AiConnectionTestResult>('/api/v1/auth/custom-ai/test-vision', {
         method: 'POST',
         body: JSON.stringify({ base_url: value.baseUrl.trim(), model: value.customModel.trim(), api_key: value.apiKey.trim() }),
+        timeoutMs: AI_REQUEST_TIMEOUT_MS,
       })
       if (!result.success) {
         onChange({ ...value, visionVerified: false })
