@@ -413,7 +413,7 @@ export function StrategiesPage() {
     {vipRequired && <div className="permission-notice"><ShieldCheck size={18} /><div><strong>{authUserVipLabel(user)} · 当前账户暂时不能创建策略</strong><span>{authUserVipDetail(user)}。您仍然可以查看已有策略和其他账户信息。</span></div></div>}
     {actionError && <div className="permission-notice"><ShieldCheck size={18} /><div><strong>策略操作失败</strong><span>{actionError}</span></div></div>}
     <div className="toolbar"><label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索策略名称或 Key" /></label><button className="button button-secondary" type="button"><Filter size={16} />全部状态</button></div>
-    {loading && !data ? <div className="permission-loading">正在加载策略...</div> : error && !data ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>策略加载失败</strong><span>{error}</span></div></div> : <div className="strategy-list">{filtered.length ? filtered.map((item) => <article className="strategy-row" key={item.id}>
+    {loading && !data ? <div className="permission-loading">正在加载策略...</div> : error && !data ? <div className="permission-notice"><ShieldCheck size={18} /><div><strong>策略加载失败</strong><span>{error}</span></div><button className="button button-secondary" type="button" onClick={refresh}>重新加载</button></div> : <div className="strategy-list">{filtered.length ? filtered.map((item) => <article className="strategy-row" key={item.id}>
       <div className="strategy-row-head">
         <div className="strategy-row-icon"><BrainCircuit /></div>
         <div className="strategy-row-title"><h3>{item.name}</h3><span>{item.strategy_code === 'CUSTOM_AI_V1' ? '自定义策略' : `GainLab 官方 · ${item.strategy_code}`}</span><span className={item.mt_login ? 'strategy-account' : 'strategy-account unbound'}><Fingerprint size={11} />{item.mt_login ? `MT 账号 ${item.mt_login}` : '未绑定账号'}</span></div>
@@ -1380,6 +1380,7 @@ export function OrdersPage() {
 
 export function AgentCenterPage() {
   const [page, setPage] = useState(1)
+  const [revision, setRevision] = useState(0)
   const [data, setData] = useState<AgentDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1409,7 +1410,7 @@ export function AgentCenterPage() {
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : '代理数据加载失败') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [page])
+  }, [page, revision])
   const copy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value)
@@ -1419,7 +1420,7 @@ export function AgentCenterPage() {
     }
   }
   if (loading && !data) return <div className="permission-loading">正在加载代理数据...</div>
-  if (!data) return <div className="permission-notice"><ShieldCheck size={18} /><div><strong>代理中心暂不可用</strong><span>{error}</span></div></div>
+  if (!data) return <div className="permission-notice"><ShieldCheck size={18} /><div><strong>代理中心暂不可用</strong><span>{error}</span></div><button className="button button-secondary" type="button" onClick={() => setRevision((value) => value + 1)}>重新加载</button></div>
   const inviteLink = `${window.location.origin}/register?invite=${data.invite_code}`
   return <>
     <PageHeading eyebrow="AGENT CENTER" title="代理中心" description="分享专属邀请链接，查看通过您邀请注册的用户。佣金和结算功能将在后续开放。" />

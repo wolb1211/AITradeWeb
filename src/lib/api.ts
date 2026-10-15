@@ -67,35 +67,70 @@ const errorMessages: Record<string, string> = {
   invalid_invite_code: '邀请码无效或该代理已停止邀请',
   invite_code_required: '注册需要邀请码，请通过代理发给您的邀请链接进入注册页面',
   agent_required: '当前账号不是代理',
+  not_your_referral: '只能查看自己邀请用户的策略',
+  network_error: '网络连接中断，已自动重试，请再试一次',
 }
 
 export class ApiError extends Error {
   code: string
+  // Set when the same request has a real chance of succeeding: a gateway error or
+  // a dropped connection. A rejected password or an expired session does not.
+  retryable: boolean
 
-  constructor(code: string) {
+  constructor(code: string, options: { retryable?: boolean } = {}) {
     super(errorMessages[code] || code || '请求失败，请稍后重试')
     this.code = code
+    this.retryable = Boolean(options.retryable)
   }
+}
+
+// A flaky long-haul connection drops the HTTP/2 connection (ERR_HTTP2_PING_FAILED)
+// or resets it mid-request, and the page then sits on "正在加载" until the user
+// reloads by hand. Two quiet retries turn that into a slightly slower load.
+const NETWORK_RETRY_DELAYS_MS = [400, 1200]
+
+function isRetryableFailure(error: unknown): boolean {
+  // fetch only rejects before a response exists: a 4xx or 5xx resolves normally.
+  if (error instanceof TypeError) return true
+  return error instanceof ApiError && error.retryable
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('gainlab_auth_token')
-  const response = await fetch(`${API_BASE}${path}`, {
+  const request: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
-  })
+  }
+  let lastError: unknown = new ApiError('network_error', { retryable: true })
+  for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await requestOnce<T>(path, request)
+    } catch (error) {
+      lastError = error
+      if (!isRetryableFailure(error) || attempt === NETWORK_RETRY_DELAYS_MS.length) break
+      await new Promise((resolve) => setTimeout(resolve, NETWORK_RETRY_DELAYS_MS[attempt]))
+    }
+  }
+  throw lastError
+}
+
+async function requestOnce<T>(path: string, request: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, request)
   let payload: { code?: number; data?: T; detail?: string; message?: string }
   try {
     payload = await response.json()
   } catch {
-    throw new ApiError('network_error')
+    // A gateway error page (nginx 502 while the API restarts) is HTML, not JSON.
+    throw new ApiError('network_error', { retryable: response.status >= 500 })
   }
   if (!response.ok || payload.code !== 0) {
-    throw new ApiError(payload.detail || payload.message || 'request_failed')
+    throw new ApiError(payload.detail || payload.message || 'request_failed', {
+      retryable: response.status >= 500 || response.status === 429,
+    })
   }
   return payload.data as T
 }
