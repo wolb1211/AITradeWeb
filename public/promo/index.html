@@ -291,6 +291,18 @@
   }
   .final h2 { margin: 0 0 10px; font-size: clamp(22px, 3vw, 32px); }
   .final p { margin: 0 auto 24px; max-width: 640px; color: var(--text-1); }
+  /* DeBox 群二维码 */
+  .qr {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    width: fit-content; margin: 28px auto 0; text-decoration: none;
+  }
+  .qr img {
+    display: block; width: 150px; height: auto; padding: 10px; border-radius: 16px;
+    background: #fff; box-shadow: 0 18px 46px rgba(0, 0, 0, .42);
+  }
+  .qr span { color: var(--text-2); font-size: 12.5px; letter-spacing: .02em; }
+  .qr:hover span { color: var(--lavender); }
+  @media (max-width: 560px) { .qr img { width: 132px; } }
   footer.foot { padding: 40px 0 56px; color: var(--text-2); font-size: 12.5px; }
   footer.foot .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
   .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
@@ -500,6 +512,10 @@
         <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即注册体验</a>
         <a class="btn btn-ghost" href="https://m.debox.pro/group?id=ymor3xro&amp;code=pz2634se" target="_blank" rel="noopener">DeBox 联系我们</a>
       </div>
+      <a class="qr" href="https://m.debox.pro/group?id=ymor3xro&amp;code=pz2634se" target="_blank" rel="noopener">
+        <img src="./debox-qr.webp" width="182" height="182" alt="DeBox 群二维码：RADR AI黄金量化服务群" loading="lazy" decoding="async" />
+        <span>扫码加入 DeBox 群 · @g_aitrader</span>
+      </a>
     </div>
   </section>
 </main>
