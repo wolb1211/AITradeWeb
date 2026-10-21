@@ -171,9 +171,10 @@
   }
   .shot img { display: block; width: 100%; height: auto; }
   .shot figcaption { padding: 14px 18px; border-top: 1px solid var(--line-soft); color: var(--text-1); font-size: 13px; }
-  .shot-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; align-items: start; }
-  @media (max-width: 900px) { .shot-grid { grid-template-columns: 1fr; } }
-  .bullets { display: grid; gap: 12px; }
+  .bullets { display: grid; gap: 12px; margin-top: 20px; }
+  /* 三列横排，小屏自动折成单列 */
+  .bullets-row { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 900px) { .bullets-row { grid-template-columns: 1fr; } }
   .bullet {
     padding: 16px 18px; border-radius: 14px;
     border: 1px solid var(--line-soft); background: var(--surface-glass);
@@ -304,16 +305,14 @@
       <h2>它就在你的终端里运行</h2>
       <p>下面是我们自己在跑的账户截图：持仓、历史统计和 AI 分析都在 EA 面板上一屏可见。</p>
     </div>
-    <div class="shot-grid">
-      <figure class="shot" style="margin:0">
-        <img src="./ea-panel.jpg" alt="GL 对冲套利策略 EA 面板：持仓列表、历史统计、AI 多周期分析与运行状态" loading="lazy" />
-        <figcaption>EA 面板 · 持仓 / 历史统计（今日 · 本周 · 本月 · 全部）/ AI 分析信息 / 账户与运行状态</figcaption>
-      </figure>
-      <div class="bullets">
-        <div class="bullet"><strong>持仓一目了然</strong><span>多单与空单分开列出，每单的手数、盈亏、现价差和操作按钮都在同一行。</span></div>
-        <div class="bullet"><strong>三种周期趋势随时可查</strong><span>短期、中期、长期分别给出多头 / 空头 / 震荡判断和一段解释，随时知道自己在逆势还是顺势。</span></div>
-        <div class="bullet"><strong>随时手动干预</strong><span>多单全平、多单平盈、空单全平、空单平盈：想收手的时候一键处理，不必等策略触发。</span></div>
-      </div>
+    <figure class="shot" style="margin:0">
+      <img src="./ea-panel.jpg" alt="GL 对冲套利策略 EA 面板：持仓列表、历史统计、AI 多周期分析与运行状态" loading="lazy" />
+      <figcaption>运行截图</figcaption>
+    </figure>
+    <div class="bullets bullets-row">
+      <div class="bullet"><strong>持仓一目了然</strong><span>多单与空单分开列出，每单的手数、盈亏、现价差和操作按钮都在同一行。</span></div>
+      <div class="bullet"><strong>三种周期趋势随时可查</strong><span>短期、中期、长期分别给出多头 / 空头 / 震荡判断和一段解释，随时知道自己在逆势还是顺势。</span></div>
+      <div class="bullet"><strong>随时手动干预</strong><span>多单全平、多单平盈、空单全平、空单平盈：想收手的时候一键处理，不必等策略触发。</span></div>
     </div>
   </section>
 
