@@ -148,9 +148,20 @@
   .field label { display: block; margin-bottom: 7px; color: var(--text-1); font-size: 12.5px; }
   .field .req { color: var(--magenta); margin-left: 3px; }
   .field .opt { color: var(--text-2); }
-  .field input { width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line); background: rgba(10, 5, 24, .62); color: var(--text-0); font-size: 13.5px; font-family: inherit; }
+  .field input, .field select {
+    width: 100%; padding: 11px 13px; border-radius: 10px;
+    border: 1px solid var(--line); background: rgba(10, 5, 24, .62);
+    color: var(--text-0); font-size: 13.5px; font-family: inherit;
+  }
   .field input::placeholder { color: var(--text-2); }
-  .field input:focus { outline: none; border-color: rgba(168, 85, 247, .62); }
+  .field input:focus, .field select:focus { outline: none; border-color: rgba(168, 85, 247, .62); }
+  .field input[readonly] { color: var(--lavender); border-color: rgba(168, 85, 247, .34); background: rgba(139, 92, 246, .1); }
+  .field select {
+    appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23c4b5fd' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 13px center;
+  }
+  .field select option { background: #180e33; color: var(--text-0); }
   .field .hint { margin-top: 6px; color: var(--text-2); font-size: 11.5px; }
   .bind-foot {
     display: flex; flex-direction: column; align-items: flex-end;
@@ -337,14 +348,25 @@
             <div class="hint">仅用于登录，提交后立即加密</div>
           </div>
           <div class="field">
-            <label for="token">代币名称</label>
-            <input id="token" type="text" value="RADRP" />
-            <div class="hint">分红按该代币结算</div>
+            <label for="pledge-token">质押 RADRP</label>
+            <input id="pledge-token" type="text" value="250" readonly />
+            <div class="hint">按资金自动折算，无需填写</div>
           </div>
           <div class="field">
-            <label for="funds">MT5 资金<span class="opt">（1000 的倍数）</span></label>
-            <input id="funds" type="text" placeholder="如 10000" />
-            <div class="hint">需为 1000 的整数倍</div>
+            <label for="funds">MT5 资金<span class="opt">（u）</span></label>
+            <select id="funds">
+              <option value="1000">1000 u</option>
+              <option value="2000">2000 u</option>
+              <option value="3000">3000 u</option>
+              <option value="4000">4000 u</option>
+              <option value="5000">5000 u</option>
+              <option value="6000">6000 u</option>
+              <option value="7000">7000 u</option>
+              <option value="8000">8000 u</option>
+              <option value="9000">9000 u</option>
+              <option value="10000">10000 u</option>
+            </select>
+            <div class="hint">1000 – 10000，按 1000 递增</div>
           </div>
           <div class="field">
             <label for="contact">联系电话 / Telegram<span class="opt">（选填）</span></label>
@@ -356,7 +378,7 @@
             提交即表示你已阅读并同意<b>《风险披露声明》</b>与<b>《服务条款》</b>。<br />
             本服务不面向美国、加拿大及受制裁地区用户。
           </p>
-          <button class="btn btn-primary" type="button">提交并生成工单 →</button>
+          <button class="btn btn-primary" type="button">提交并质押 →</button>
         </div>
       </div>
     </div>
@@ -500,6 +522,19 @@
 <script>
   // 只更新年份，其余不依赖 JS，静态托管即可。
   document.getElementById('y').textContent = new Date().getFullYear()
+
+  // 质押数量按 MT5 资金自动折算：1000 u = 250 代币（每 4 u 兑 1 枚），用户不可填。
+  ;(function () {
+    var funds = document.getElementById('funds')
+    var token = document.getElementById('pledge-token')
+    if (!funds || !token) return
+    var sync = function () {
+      var u = Number(funds.value) || 0
+      token.value = String(Math.round(u / 4))
+    }
+    funds.addEventListener('change', sync)
+    sync()
+  })()
 </script>
 </body>
 </html>
