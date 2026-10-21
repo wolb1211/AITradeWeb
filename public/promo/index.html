@@ -229,6 +229,14 @@
   }
   .final h2 { margin: 0 0 10px; font-size: clamp(22px, 3vw, 32px); }
   .final p { margin: 0 auto 24px; max-width: 640px; color: var(--text-1); }
+  /* 邀请码 + 联系方式那一行 */
+  .contact-note { margin: 18px 0 0; color: var(--text-2); font-size: 13px; }
+  .contact-note code {
+    padding: 2px 9px; border-radius: 6px;
+    border: 1px solid var(--line); background: rgba(168, 85, 247, .12);
+    color: var(--lavender); font-family: var(--font-display); font-size: 12.5px;
+    letter-spacing: .06em;
+  }
   footer.foot { padding: 40px 0 56px; color: var(--text-2); font-size: 12.5px; }
   footer.foot .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
   .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
@@ -247,7 +255,7 @@
       <a href="#start">如何接入</a>
       <a href="#faq">常见问题</a>
     </nav>
-    <a class="btn btn-primary" href="#start">立即体验</a>
+    <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即体验</a>
   </div>
 </header>
 
@@ -257,7 +265,7 @@
     <h1>让行情波动<br /><span class="grad">变成对冲套利引擎</span></h1>
     <p class="lede">根据行情趋势开仓，通过趋势方向差异套利离场。</p>
     <div class="hero-cta">
-      <a class="btn btn-primary" href="#start">免费试用策略</a>
+      <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">免费试用策略</a>
       <a class="btn btn-ghost" href="#ea">看它实际怎么跑</a>
     </div>
 
@@ -366,12 +374,14 @@
 
   <section class="block wrap" id="try">
     <div class="final">
-      <h2>先用模拟账户跑一轮</h2>
+      <h2>立即体验</h2>
       <p>注册后选择「GL对冲套利策略」，填好首单手数就能拿到部署 Key，挂到 EA 上即可开始。</p>
       <div class="hero-cta" style="margin-top:0">
-        <a class="btn btn-primary" href="https://aitrader.gainlab.ai/">进入平台体验</a>
-        <a class="btn btn-ghost" href="#engine">再看一遍原理</a>
+        <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即注册体验</a>
+        <!-- TODO: 换成正式 Telegram 地址（只改下面这个 href） -->
+        <a class="btn btn-ghost" href="https://t.me/" target="_blank" rel="noopener">Telegram 联系我们</a>
       </div>
+      <p class="contact-note">邀请码 <code>GLF9A99B6981</code> · 也可通过 Telegram 咨询接入与参数</p>
     </div>
   </section>
 </main>
@@ -383,7 +393,9 @@
       <a href="#engine">套利引擎</a>
       <a href="#start">如何接入</a>
       <a href="#faq">常见问题</a>
-      <a href="https://aitrader.gainlab.ai/">进入平台</a>
+      <!-- TODO: 换成正式 Telegram 地址 -->
+      <a href="https://t.me/" target="_blank" rel="noopener">Telegram</a>
+      <a href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即注册</a>
     </span>
   </div>
 </footer>
