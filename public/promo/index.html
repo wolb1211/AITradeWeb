@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GL 对冲套利策略 · 双向持仓 盈亏互锁</title>
+<meta name="description" content="GL 对冲套利策略：双向持仓跟随行情，行情转向时平掉盈利腿、保留亏损腿并逐步减仓。EA 本地执行，服务端提供授权与多周期趋势分析。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-0: #100827;
+    --bg-1: #180e33;
+    --surface: #1e1440;
+    --surface-glass: rgba(30, 20, 64, .5);
+    --purple: #8b5cf6;
+    --electric: #a855f7;
+    --magenta: #d946ef;
+    --lavender: #c4b5fd;
+    --text-0: #f5f3ff;
+    --text-1: #b4aec7;
+    --text-2: #7d7699;
+    --line: rgba(168, 85, 247, .22);
+    --line-soft: rgba(168, 85, 247, .13);
+    --glow-purple: 0 0 40px rgba(168, 85, 247, .35);
+    --maxw: 1180px;
+    --radius: 18px;
+    --font-display: 'Orbitron', 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--text-0);
+    background: var(--bg-0);
+    font-family: var(--font-body);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 暗紫底 + 紫色网格 + 顶部光晕，取自目标站点的视觉语言 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(900px 520px at 50% -10%, rgba(168, 85, 247, .22), transparent 70%),
+      radial-gradient(700px 460px at 85% 10%, rgba(217, 70, 239, .12), transparent 70%),
+      linear-gradient(180deg, var(--bg-0), var(--bg-1) 55%, #0b0518);
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(168, 85, 247, .055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168, 85, 247, .055) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 78%);
+    -webkit-mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 78%);
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: min(var(--maxw), calc(100% - 44px)); margin-inline: auto; }
+
+  /* ── 导航 ── */
+  header.nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    backdrop-filter: blur(14px);
+    background: rgba(16, 8, 39, .72);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav .wrap { display: flex; align-items: center; gap: 22px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 800; letter-spacing: .06em; }
+  .brand .mark {
+    display: grid; place-items: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--purple), var(--magenta));
+    box-shadow: var(--glow-purple);
+    font-size: 13px;
+  }
+  .nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--text-1); }
+  .nav .links a:hover { color: var(--text-0); }
+  @media (max-width: 760px) { .nav .links { display: none; } }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 22px; border-radius: 999px;
+    font-weight: 700; font-size: 14px; letter-spacing: .02em;
+    border: 1px solid transparent; cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .btn-primary {
+    color: #fff;
+    background: linear-gradient(90deg, var(--purple), var(--electric), var(--magenta));
+    box-shadow: 0 10px 30px rgba(168, 85, 247, .35);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(217, 70, 239, .42); }
+  .btn-ghost { color: var(--text-0); border-color: var(--line); background: var(--surface-glass); }
+  .btn-ghost:hover { border-color: var(--electric); }
+
+  /* ── Hero ── */
+  .hero { padding: 84px 0 56px; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-glass);
+    color: var(--lavender);
+    font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    font-family: var(--font-display);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); box-shadow: 0 0 12px var(--magenta); }
+  h1 {
+    margin: 26px 0 18px;
+    font-family: var(--font-display);
+    font-size: clamp(30px, 5.2vw, 58px);
+    line-height: 1.15;
+    letter-spacing: .01em;
+  }
+  h1 .grad {
+    background: linear-gradient(90deg, var(--purple), var(--electric), var(--magenta));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede { max-width: 680px; margin: 0 auto; color: var(--text-1); font-size: clamp(14px, 1.6vw, 17px); }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 30px; }
+
+  /* ── 指标条 ── */
+  .metrics {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    margin-top: 54px;
+  }
+  @media (max-width: 860px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .metric {
+    padding: 20px 18px; border-radius: var(--radius);
+    border: 1px solid var(--line-soft);
+    background: var(--surface-glass);
+  }
+  .metric .label { color: var(--text-2); font-size: 12px; letter-spacing: .08em; }
+  .metric .value {
+    margin-top: 6px;
+    font-family: var(--font-display);
+    font-size: clamp(20px, 2.6vw, 28px);
+    font-weight: 800;
+    color: var(--lavender);
+  }
+  .metric .hint { color: var(--text-2); font-size: 12px; }
+
+  /* ── 区块 ── */
+  section.block { padding: 64px 0; }
+  .section-head { max-width: 720px; margin-bottom: 34px; }
+  .section-head .tag {
+    font-family: var(--font-display);
+    font-size: 12px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--electric);
+  }
+  .section-head h2 { margin: 10px 0 10px; font-size: clamp(22px, 3vw, 34px); line-height: 1.25; }
+  .section-head p { margin: 0; color: var(--text-1); }
+
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    position: relative;
+    padding: 24px; border-radius: var(--radius);
+    border: 1px solid var(--line-soft);
+    background: linear-gradient(135deg, rgba(139, 92, 246, .18), rgba(217, 70, 239, .12));
+  }
+  .card::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit;
+    border: 1px solid transparent;
+    background: linear-gradient(90deg, var(--purple), var(--magenta)) border-box;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: .25; pointer-events: none;
+  }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: var(--text-1); font-size: 14px; }
+  .card .num {
+    font-family: var(--font-display);
+    font-size: 12px; letter-spacing: .18em; color: var(--magenta);
+  }
+
+  /* ── 机制步骤 ── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+  .step {
+    padding: 24px; border-radius: var(--radius);
+    border: 1px solid var(--line-soft);
+    background: var(--surface-glass);
+  }
+  .step .idx {
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+    background: rgba(168, 85, 247, .16); border: 1px solid var(--line);
+    font-family: var(--font-display); font-weight: 700; color: var(--lavender);
+    margin-bottom: 14px;
+  }
+  .step h3 { margin: 0 0 6px; font-size: 16px; }
+  .step p { margin: 0; color: var(--text-1); font-size: 14px; }
+
+  /* ── 曲线卡 ── */
+  .chart-card {
+    padding: 26px; border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--surface-glass);
+    box-shadow: inset 0 0 60px rgba(168, 85, 247, .08);
+  }
+  .chart-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .chart-head h3 { margin: 0; font-size: 16px; }
+  .chart-head span { color: var(--text-2); font-size: 12px; }
+  .chart-card svg { display: block; width: 100%; height: auto; }
+
+  /* ── 风险提示 ── */
+  .risk {
+    padding: 22px 24px; border-radius: var(--radius);
+    border: 1px solid rgba(217, 70, 239, .34);
+    background: rgba(217, 70, 239, .07);
+  }
+  .risk h3 { margin: 0 0 8px; font-size: 15px; color: #fbcffb; }
+  .risk p { margin: 0; color: var(--text-1); font-size: 13.5px; }
+
+  /* ── FAQ ── */
+  details.faq {
+    padding: 16px 20px; border-radius: 14px; margin-bottom: 10px;
+    border: 1px solid var(--line-soft);
+    background: var(--surface-glass);
+  }
+  details.faq summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::after { content: '+'; float: right; color: var(--electric); font-family: var(--font-display); }
+  details.faq[open] summary::after { content: '−'; }
+  details.faq p { margin: 10px 0 0; color: var(--text-1); font-size: 14px; }
+
+  /* ── 结尾 CTA + 页脚 ── */
+  .final {
+    padding: 56px 26px; text-align: center; border-radius: 24px;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(600px 240px at 50% 0%, rgba(217, 70, 239, .18), transparent 70%),
+      var(--surface-glass);
+    box-shadow: var(--glow-purple);
+  }
+  .final h2 { margin: 0 0 10px; font-size: clamp(22px, 3vw, 32px); }
+  .final p { margin: 0 auto 24px; max-width: 620px; color: var(--text-1); }
+  footer.foot { padding: 40px 0 56px; color: var(--text-2); font-size: 12.5px; }
+  footer.foot .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
+  .foot-links a:hover { color: var(--text-1); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="mark">GL</span><span>GAINLAB</span></a>
+    <nav class="links">
+      <a href="#how">策略原理</a>
+      <a href="#flow">执行流程</a>
+      <a href="#curve">运行表现</a>
+      <a href="#run">怎么运行</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <a class="btn btn-primary" href="#start">立即体验</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <span class="eyebrow"><span class="dot"></span>GL_ARBITRAGE_V1 · 对冲套利</span>
+    <h1>双向持仓，<span class="grad">盈亏互锁</span><br />让行情替你做选择</h1>
+    <p class="lede">
+      单商品对冲套利：同时持有多空两条腿，行情往哪边走都有头寸。转向时锁掉已经拿到的利润、
+      保留会回来的那一腿并逐步减仓，不猜顶不猜底。
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#start">免费试用策略</a>
+      <a class="btn btn-ghost" href="#how">先看它怎么工作</a>
+    </div>
+
+    <div class="metrics">
+      <!-- 这些数字请替换为平台真实统计；下面保留占位符，避免对外宣称未经核实的收益 -->
+      <div class="metric"><div class="label">双向持仓</div><div class="value">2 腿</div><div class="hint">多空同时在场</div></div>
+      <div class="metric"><div class="label">单向加仓上限</div><div class="value">可配置</div><div class="hint">默认 30 单</div></div>
+      <div class="metric"><div class="label">盈带亏起始</div><div class="value">可配置</div><div class="hint">默认第 10 单</div></div>
+      <div class="metric"><div class="label">执行位置</div><div class="value">EA 本地</div><div class="hint">服务端只做授权与分析</div></div>
+    </div>
+  </section>
+
+  <section class="block wrap" id="how">
+    <div class="section-head">
+      <div class="tag">How it works</div>
+      <h2>它不预测方向，它管理两条腿的关系</h2>
+      <p>传统策略要判断涨跌；对冲套利判断的是：哪条腿已经赚够了，哪条腿还值得等。</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <div class="num">01</div>
+        <h3>双向建仓，方向不再重要</h3>
+        <p>跟随价格方向同时开出两条腿。价格往上，多腿盈利；价格往下，空腿盈利。第一个问题从「会不会涨」变成「哪条腿该收」。</p>
+      </article>
+      <article class="card">
+        <div class="num">02</div>
+        <h3>转向就平盈利腿</h3>
+        <p>行情掉头时，把已经走到目标的那条腿止盈落袋，亏损的另一条腿留着等回撤——这就是「盈亏互锁」。</p>
+      </article>
+      <article class="card">
+        <div class="num">03</div>
+        <h3>盈带亏，逐步减仓</h3>
+        <p>用盈利单去覆盖带亏单：达到设定单数后按规则逐步减掉亏损腿，而不是一次性割在最低点。</p>
+      </article>
+      <article class="card">
+        <div class="num">04</div>
+        <h3>AI 只做趋势参考</h3>
+        <p>服务端用 AI 分析长 / 中 / 短三个周期的趋势，给 EA 一个参考值。方向判断不依赖 AI，AI 只帮你判断「现在是单边还是震荡」。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="block wrap" id="flow">
+    <div class="section-head">
+      <div class="tag">Execution</div>
+      <h2>三步走完一个完整周期</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="idx">1</div>
+        <h3>随方向开首单</h3>
+        <p>按你设定的首单手数建第一笔仓，另一条腿由策略在需要时补上，形成对冲结构。</p>
+      </div>
+      <div class="step">
+        <div class="idx">2</div>
+        <h3>按间隔加仓</h3>
+        <p>每走出一段设定间隔就补一单，加仓手数按系数递增，单向最多到设定的上限单数。</p>
+      </div>
+      <div class="step">
+        <div class="idx">3</div>
+        <h3>转向收利润、减亏损</h3>
+        <p>到达止盈触发值后启动移动止损；行情反转则平掉盈利腿，用利润带住亏损腿并逐步减仓离场。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block wrap" id="curve">
+    <div class="section-head">
+      <div class="tag">Performance</div>
+      <h2>运行表现</h2>
+      <p>以下曲线为示意，用于说明策略的资金曲线形态；请以平台后台的真实统计为准。</p>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3>累计净盈亏（示意）</h3>
+        <span>统计口径：按天汇总 · 明细以 MT 账号交割单为准</span>
+      </div>
+      <svg viewBox="0 0 760 260" role="img" aria-label="累计净盈亏示意图">
+        <defs>
+          <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#8b5cf6" />
+            <stop offset="55%" stop-color="#a855f7" />
+            <stop offset="100%" stop-color="#d946ef" />
+          </linearGradient>
+          <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(168,85,247,.35)" />
+            <stop offset="100%" stop-color="rgba(168,85,247,0)" />
+          </linearGradient>
+        </defs>
+        <g stroke="rgba(168,85,247,.12)" stroke-width="1">
+          <line x1="0" y1="52" x2="760" y2="52" />
+          <line x1="0" y1="104" x2="760" y2="104" />
+          <line x1="0" y1="156" x2="760" y2="156" />
+          <line x1="0" y1="208" x2="760" y2="208" />
+        </g>
+        <path d="M0 214 L60 206 L120 190 L180 196 L240 168 L300 150 L360 158 L420 128 L480 112 L540 118 L600 92 L660 74 L720 66 L760 60 L760 240 L0 240 Z" fill="url(#area)" />
+        <path d="M0 214 L60 206 L120 190 L180 196 L240 168 L300 150 L360 158 L420 128 L480 112 L540 118 L600 92 L660 74 L720 66 L760 60" fill="none" stroke="url(#line)" stroke-width="2.4" stroke-linecap="round" />
+        <g fill="#d946ef">
+          <circle cx="720" cy="66" r="4" />
+          <circle cx="760" cy="60" r="4" />
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <section class="block wrap" id="run">
+    <div class="section-head">
+      <div class="tag">Deployment</div>
+      <h2>怎么运行它</h2>
+      <p>策略挂在你的 MT4 / MT5 上本地执行，你的账户和资金始终在你自己手里。</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <div class="num">EA 侧</div>
+        <h3>本地执行，下单不经过服务器</h3>
+        <p>开仓、加仓、止盈、减仓都由 EA 在终端本地完成。网络波动不会让你的持仓失去管理。</p>
+      </article>
+      <article class="card">
+        <div class="num">服务端</div>
+        <h3>只负责授权与趋势分析</h3>
+        <p>服务端下发策略参数、校验授权，并按周期给出趋势参考。参数在后台统一调整，所有 EA 同步生效。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="block wrap">
+    <div class="risk">
+      <h3>风险提示</h3>
+      <p>
+        对冲与加仓会同时放大持仓规模，行情长时间单边运行时会累积浮亏，请务必先用模拟账户或小资金验证，
+        并设置你能够承受的单向止损与最大单数。历史表现不代表未来收益；本页展示的曲线为示意，
+        实际成交与盈亏请以你 MT4/MT5 账号的交割单为唯一依据。
+      </p>
+    </div>
+  </section>
+
+  <section class="block wrap" id="faq">
+    <div class="section-head">
+      <div class="tag">FAQ</div>
+      <h2>常见问题</h2>
+    </div>
+    <details class="faq"><summary>它能保证盈利吗？</summary><p>不能。对冲降低的是「方向判断错」的风险，并不能消除行情单边运行时累积浮亏的风险。请在可承受范围内使用。</p></details>
+    <details class="faq"><summary>需要一直开着电脑吗？</summary><p>EA 运行在 MT4/MT5 终端上，终端需要保持在线。用 VPS 跑终端是常见做法。</p></details>
+    <details class="faq"><summary>首单手数可以自己设置吗？</summary><p>可以。首单手数由你在客户端设置；加仓上限、加仓间隔、止盈与减仓这些参数由平台统一配置，EA 启动时自动读取。</p></details>
+    <details class="faq"><summary>AI 参与决策吗？</summary><p>AI 只输出长 / 中 / 短三个周期的趋势判断作为参考，不会替 EA 下单。开平仓规则完全在 EA 内执行。</p></details>
+    <details class="faq"><summary>数据从哪里看？</summary><p>平台提供每个策略 Key 的分析次数、订单数、累计盈亏与曲线；更细的每一单成交请查看你的 MT 账号交割单。</p></details>
+  </section>
+
+  <section class="block wrap" id="start">
+    <div class="final">
+      <h2>先用模拟账户跑一轮</h2>
+      <p>注册后在策略库选择「GL对冲套利策略」，填好首单手数就能拿到部署 Key，挂到 EA 上即可开始。</p>
+      <div class="hero-cta" style="margin-top:0">
+        <a class="btn btn-primary" href="https://aitrader.gainlab.ai/">进入平台体验</a>
+        <a class="btn btn-ghost" href="https://aitrader.gainlab.ai/">查看其它策略</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© <span id="y">2026</span> GainLab · GL 对冲套利策略</span>
+    <span class="foot-links">
+      <a href="#how">策略原理</a>
+      <a href="#faq">常见问题</a>
+      <a href="https://aitrader.gainlab.ai/">进入平台</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  // 只做一件事：年份自动更新。页面其余部分不依赖 JS，静态托管即可。
+  document.getElementById('y').textContent = new Date().getFullYear()
+</script>
+</body>
+</html>
