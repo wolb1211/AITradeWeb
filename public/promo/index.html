@@ -199,6 +199,30 @@
   .step h3 { margin: 8px 0 6px; font-size: 15px; }
   .step p { margin: 0; color: var(--text-1); font-size: 13.5px; }
 
+  /* ── 策略定位（不是暴利策略） ── */
+  .creed {
+    position: relative; padding: 46px 34px; border-radius: var(--radius); text-align: center;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(120% 150% at 50% 0%, rgba(168, 85, 247, .2), transparent 62%),
+      var(--surface-glass);
+  }
+  .creed .tag {
+    font-family: var(--font-display); font-size: 12px;
+    letter-spacing: .2em; text-transform: uppercase; color: var(--electric);
+  }
+  .creed h2 { margin: 12px auto 16px; max-width: 680px; font-size: clamp(23px, 3.2vw, 36px); line-height: 1.24; }
+  .creed .lead {
+    max-width: 660px; margin: 0 auto; color: var(--text-0);
+    font-size: clamp(14.5px, 1.5vw, 17px); line-height: 1.8;
+  }
+  .creed .sub {
+    max-width: 660px; margin: 16px auto 0; padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    color: var(--text-1); font-size: 13.5px; line-height: 1.85;
+  }
+  @media (max-width: 620px) { .creed { padding: 34px 22px; } }
+
   /* ── 风险 ── */
   .risk {
     padding: 22px 24px; border-radius: var(--radius);
@@ -326,6 +350,19 @@
       <img src="./client-orders.webp" width="1354" height="864" alt="客户端的累计净盈亏曲线与历史订单明细" loading="lazy" decoding="async" />
       <figcaption>客户端 · 历史订单 / 盈利率 / 累计净盈亏曲线 / 订单明细（示例账户，交易账号已隐去，仅显示近 7 天明细）</figcaption>
     </figure>
+  </section>
+
+  <section class="block wrap" id="stance">
+    <div class="creed">
+      <div class="tag">Positioning</div>
+      <h2>这不是暴利策略</h2>
+      <p class="lead">暴利往往伴随高风险。这套策略要的不是短期暴利，而是在长期稳定运行中一点点积累套利收益。</p>
+      <p class="sub">
+        它不会让曲线一路直线上扬——行情长时间单向运行时会有浮亏，个别阶段也会有回撤。
+        我们能做的是把止损、加仓上限与减仓规则固定下来，让它在不同行情里都能继续运行下去，
+        而不是在某一波行情里赌赢一次。
+      </p>
+    </div>
   </section>
 
   <section class="block wrap" id="start">
