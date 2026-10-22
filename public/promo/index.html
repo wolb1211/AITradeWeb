@@ -260,24 +260,24 @@
   }
   @media (max-width: 620px) { .creed { padding: 34px 22px; } }
 
-  /* ── 风险 ── */
-  .risk {
-    padding: 22px 24px; border-radius: var(--radius);
-    border: 1px solid rgba(217, 70, 239, .34); background: rgba(217, 70, 239, .07);
-  }
-  .risk h3 { margin: 0 0 8px; font-size: 15px; color: #fbcffb; }
-  .risk p { margin: 0; color: var(--text-1); font-size: 13.5px; }
-
   /* ── FAQ ── */
-  details.faq {
-    padding: 16px 20px; border-radius: 14px; margin-bottom: 10px;
+  .faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px) { .faq-grid { grid-template-columns: 1fr; } }
+  .faq-card {
+    padding: 22px 24px; border-radius: var(--radius);
     border: 1px solid var(--line-soft); background: var(--surface-glass);
   }
-  details.faq summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; }
-  details.faq summary::-webkit-details-marker { display: none; }
-  details.faq summary::after { content: '+'; float: right; color: var(--electric); font-family: var(--font-display); }
-  details.faq[open] summary::after { content: '−'; }
-  details.faq p { margin: 10px 0 0; color: var(--text-1); font-size: 14px; }
+  .faq-card .idx { font-family: var(--font-display); font-size: 12px; letter-spacing: .16em; color: var(--magenta); }
+  .faq-card h3 { margin: 10px 0 8px; font-size: 15.5px; }
+  .faq-card p { margin: 0; color: var(--text-1); font-size: 13.5px; line-height: 1.8; }
+
+  /* ── 风险披露 ── */
+  .disclosure {
+    margin-top: 24px; padding: 24px 26px; border-radius: var(--radius);
+    border: 1px solid var(--line-soft); background: rgba(255, 255, 255, .02);
+  }
+  .disc-tag { font-family: var(--font-display); font-size: 11.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--text-2); }
+  .disclosure p { margin: 12px 0 0; color: var(--text-2); font-size: 12.5px; line-height: 1.9; }
 
   /* ── 结尾 ── */
   .final {
@@ -478,27 +478,38 @@
     </div>
   </section>
 
-  <section class="block wrap">
-    <div class="risk">
-      <h3>风险提示</h3>
-      <p>
-        对冲与加仓会同时放大持仓规模，行情长时间单向运行时浮亏会累积，请务必先用模拟账户或小资金验证，
-        并设置你能承受的单向止损与最大单数。页面中的截图来自我们自己的运行账户，仅用于说明界面与工作方式，
-        历史表现不代表未来收益；实际成交与盈亏请以你 MT4 / MT5 账号的交割单为唯一依据。
-      </p>
-    </div>
-  </section>
-
   <section class="block wrap" id="faq">
     <div class="section-head">
       <div class="tag">FAQ</div>
       <h2>常见问题</h2>
     </div>
-    <details class="faq"><summary>它能保证盈利吗？</summary><p>不能。对冲降低的是「方向判断错」的风险，并不能消除行情单边运行时累积浮亏的风险。请在可承受范围内使用。</p></details>
-    <details class="faq"><summary>需要一直开着电脑吗？</summary><p>EA 运行在 MT4 / MT5 终端上，终端需要保持在线。用 VPS 常驻运行终端是常见做法。</p></details>
-    <details class="faq"><summary>首单手数可以自己设置吗？</summary><p>可以。首单手数由你在客户端设置；加仓上限、加仓间隔、止盈与减仓这些参数由平台统一配置，EA 启动时自动读取。</p></details>
-    <details class="faq"><summary>AI 会替我下单吗？</summary><p>不会。AI 只输出短、中、长三个周期的趋势判断作为参考，不参与下单。开平仓规则完全在 EA 内执行。</p></details>
-    <details class="faq"><summary>数据从哪里看？</summary><p>平台提供每个策略 Key 的分析次数、订单数、累计盈亏与曲线；更细的每一单成交请查看你的 MT 账号交割单。</p></details>
+    <div class="faq-grid">
+      <article class="faq-card">
+        <div class="idx">01</div>
+        <h3>我需要自己盯盘或下单吗？</h3>
+        <p>不需要。绑定完成后由后台 EA 全自动执行，你只需要在 MT5 客户端查看结果。策略参数、加仓、止损全部由系统处理。</p>
+      </article>
+      <article class="faq-card">
+        <div class="idx">02</div>
+        <h3>把交易密码给你们安全吗？</h3>
+        <p>凭据经 AES-256 加密后存储，仅在 EA 挂载时解密调用，运营人员无法查看明文。若券商支持，建议提供只读的投资者密码，同样可运行策略监控。</p>
+      </article>
+      <article class="faq-card">
+        <div class="idx">03</div>
+        <h3>质押代币和交易账户是什么关系？</h3>
+        <p>交易账户负责产生利润，质押决定你分走多少。两者独立：质押算力越高，每小时从分红池获得的份额越大，与账户本金大小无关。</p>
+      </article>
+      <article class="faq-card">
+        <div class="idx">04</div>
+        <h3>如果出现亏损怎么办？</h3>
+        <p>策略设有日内 3.5% 熔断与 6 倍敞口硬顶，历史最大回撤 11.2%。但量化交易无法消除风险，历史表现不代表未来收益，请以可承受亏损的资金参与。</p>
+      </article>
+    </div>
+
+    <div class="disclosure">
+      <div class="disc-tag">Risk Disclosure</div>
+      <p>本页面所展示的收益数据来自历史实盘账户回测与记录，不代表对未来收益的任何承诺或保证。杠杆交易与数字资产质押均存在本金损失风险，极端行情下可能出现超过预期的回撤。请在充分理解产品机制与自身风险承受能力后参与。本页面内容不构成任何投资建议。</p>
+    </div>
   </section>
 
   <section class="block wrap" id="try">
