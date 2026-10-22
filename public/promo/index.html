@@ -223,10 +223,9 @@
   .bullet strong { display: block; margin-bottom: 4px; font-size: 15px; }
   .bullet span { color: var(--text-1); font-size: 13.5px; }
 
-  /* ── 四步 ── */
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-  @media (max-width: 900px) { .steps { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+  /* ── 接入步骤 ── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .steps { grid-template-columns: 1fr; } }
   .step {
     padding: 22px; border-radius: var(--radius);
     border: 1px solid var(--line-soft); background: var(--surface-glass);
@@ -239,6 +238,8 @@
   }
   .step h3 { margin: 8px 0 6px; font-size: 15px; }
   .step p { margin: 0; color: var(--text-1); font-size: 13.5px; }
+  .step .step-link { color: var(--lavender); text-decoration: none; border-bottom: 1px solid rgba(196, 181, 253, .4); white-space: nowrap; }
+  .step .step-link:hover { color: var(--electric); border-bottom-color: var(--electric); }
 
   /* ── 策略定位（不是暴利策略） ── */
   .creed {
@@ -319,7 +320,7 @@
       <a href="#start">如何接入</a>
       <a href="#faq">常见问题</a>
     </nav>
-    <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即体验</a>
+    <a class="btn btn-primary" href="https://portal.dlsm-legend.com/register?node=MjU1Mzc=&amp;language=zh-Hans">立即体验</a>
   </div>
 </header>
 
@@ -468,13 +469,12 @@
   <section class="block wrap" id="start">
     <div class="section-head">
       <div class="tag">Get Started</div>
-      <h2>四步接入，剩下的交给它</h2>
+      <h2>三步接入，剩下的交给我们</h2>
     </div>
     <div class="steps">
-      <div class="step"><div class="idx">01</div><h3>注册并开通策略</h3><p>在平台策略库选择「GL对冲套利策略」，填好首单手数，创建你的策略 Key。</p></div>
-      <div class="step"><div class="idx">02</div><h3>下载并挂上 EA</h3><p>把 EA 装到 MT4 / MT5，填入策略 Key，允许 WebRequest 访问平台接口。</p></div>
-      <div class="step"><div class="idx">03</div><h3>EA 自动取得参数</h3><p>启动时从服务端读取加仓、止盈、减仓等参数，并按周期获取 AI 多周期趋势参考。</p></div>
-      <div class="step"><div class="idx">04</div><h3>本地执行 · 平台统计</h3><p>开平仓全部在你终端本地完成；成交同步回平台，随时查看曲线与明细。</p></div>
+      <div class="step"><div class="idx">01</div><h3>注册券商账户</h3><p>在 DLSMarkets 开立 MT5 账户，拿到登录号、服务器名称与主密码。<a class="step-link" href="https://portal.dlsm-legend.com/register?node=MjU1Mzc=&amp;language=zh-Hans" target="_blank" rel="noopener">去注册 →</a></p></div>
+      <div class="step"><div class="idx">02</div><h3>提交账户并质押</h3><p>回到页面上方表单，填好 MT5 登录号、服务器名称与主密码，选择 MT5 资金档位，确认质押的 RADRP 数量后提交。</p></div>
+      <div class="step"><div class="idx">03</div><h3>DeBox 联系我们</h3><p>提交后加入 DeBox 群（@g_aitrader），我们核对账户与质押信息，完成策略挂载并通知你开始运行。</p></div>
     </div>
   </section>
 
@@ -504,9 +504,9 @@
   <section class="block wrap" id="try">
     <div class="final">
       <h2>立即体验</h2>
-      <p>注册后选择「GL对冲套利策略」，填好首单手数就能拿到部署 Key，挂到 EA 上即可开始。</p>
+      <p>先在 DLSMarkets 开立 MT5 账户，再把登录信息提交到上方表单并确认质押，剩下的由我们完成，加群随时跟进进度。</p>
       <div class="hero-cta" style="margin-top:0">
-        <a class="btn btn-primary" href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即注册体验</a>
+        <a class="btn btn-primary" href="https://portal.dlsm-legend.com/register?node=MjU1Mzc=&amp;language=zh-Hans">立即注册体验</a>
         <a class="btn btn-ghost" href="https://m.debox.pro/group?id=ymor3xro&amp;code=pz2634se" target="_blank" rel="noopener">DeBox 联系我们</a>
       </div>
       <a class="qr" href="https://m.debox.pro/group?id=ymor3xro&amp;code=pz2634se" target="_blank" rel="noopener">
@@ -525,7 +525,7 @@
       <a href="#start">如何接入</a>
       <a href="#faq">常见问题</a>
       <a href="https://m.debox.pro/group?id=ymor3xro&amp;code=pz2634se" target="_blank" rel="noopener">DeBox 群</a>
-      <a href="https://aitrader.gainlab.ai/register?invite=GLF9A99B6981">立即注册</a>
+      <a href="https://portal.dlsm-legend.com/register?node=MjU1Mzc=&amp;language=zh-Hans">立即注册</a>
     </span>
   </div>
 </footer>
