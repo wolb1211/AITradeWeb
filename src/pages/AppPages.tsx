@@ -318,6 +318,8 @@ function sceneText(value: string) { const endpoint = String(value || '').toLower
 // not offer those controls for them.
 const ADDING_STRATEGIES = new Set(['GL_TREND_V1', 'CUSTOM_AI_V1'])
 function strategySupportsAdding(code: string | undefined | null) { return ADDING_STRATEGIES.has(String(code || '')) }
+// 对冲套利的各版本由 EA 本地全权执行，客户端只让用户填首单手数。
+const ARBITRAGE_STRATEGY_CODES = new Set(['GL_ARBITRAGE_V1', 'GL_ARBITRAGE_V2'])
 function dataTypeText(value: string) { return value === 'kline' ? 'K 线' : value || '-' }
 function publicAiErrorText(value: string | undefined) {
   const cleaned = String(value || '')
@@ -719,7 +721,7 @@ function StrategyForm({ source, editing = false, deployment, onSaved, onCancel }
     setAllowAdd(Boolean(config.allow_add_position ?? config.allow_add ?? isGlTrend))
   }, [deployment, libraryStrategy, strategySource])
   // 对冲套利策略的开平仓完全由 EA 本地执行，页面只需要首单开单手数。
-  const isArbitrage = libraryStrategy?.code === 'GL_ARBITRAGE_V1'
+  const isArbitrage = ARBITRAGE_STRATEGY_CODES.has(String(libraryStrategy?.code || ''))
   const strategyTitle = libraryStrategy?.name || deployment?.name || 'GL 趋势自动分析策略'
   const strategyDescription = libraryStrategy?.summary || deployment?.summary || '暂无策略介绍。'
   // Only strategies that actually pyramid expose the position-limit and add-on
